@@ -1,0 +1,38 @@
+{
+  "name": "robloxupdatetracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "clean": "node -e \"const fs=require('fs');const w=new Int32Array(new SharedArrayBuffer(4));for(let a=1;;a++){try{fs.rmSync('dist',{recursive:true,force:true});break}catch(e){if(a>=6)throw e;console.error('dist is locked ('+e.code+'), retry '+a+'/5');Atomics.wait(w,0,0,400*a)}}\"",
+    "build": "npm run clean && tsc && node -e \"console.log('Build completed successfully.')\"",
+    "start": "node dist/index.js",
+    "pm2:start": "pm2 startOrReload ecosystem.config.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "register-commands": "tsx src/lib/registerCommands.ts",
+    "refresh-cards": "tsx scripts/refreshCards.ts"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.1.1",
+    "@types/node-fetch": "^2.6.13",
+    "@types/pngjs": "^6.0.5",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "better-sqlite3@12.11.1": true
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "better-sqlite3": "^12.11.1",
+    "discord.js": "^14.26.5",
+    "dotenv": "^17.4.2",
+    "node-fetch": "^3.3.2",
+    "pngjs": "^7.0.0"
+  }
+}
