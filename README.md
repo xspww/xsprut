@@ -11,9 +11,7 @@
   <img src="https://img.shields.io/badge/platform-Windows-blue" alt="platform">
 </p>
 
-<p align="center">
-  <video src="img/showcase.mp4" width="600" controls muted loop autoplay playsinline></video>
-</p>
+https://github.com/user-attachments/assets/7a14de45-8027-463f-bef6-8e32f8b06c3c
 
 ---
 
