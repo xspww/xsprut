@@ -11,16 +11,16 @@ import { invalidateAlerts } from "../lib/dbCache";
 
 export const data = new SlashCommandBuilder()
   .setName("robloxalert")
-  .setDescription("📢 จัดการระบบแจ้งเตือนการอัปเดตของ Roblox")
+  .setDescription("📢 Manage the Roblox update alert system")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((subcommand) =>
     subcommand
       .setName("add")
-      .setDescription("➕ เปิดการแจ้งเตือนในห้องนี้")
+      .setDescription("➕ Enable alerts in this channel")
       .addStringOption((option) =>
         option
           .setName("roblox_channel")
-          .setDescription("ช่อง Roblox ที่ต้องการติดตาม")
+          .setDescription("The Roblox channel to track")
           .setRequired(true)
           .addChoices(
             ...ROBLOX_CHANNELS.map((channel) => ({
@@ -32,25 +32,25 @@ export const data = new SlashCommandBuilder()
       .addChannelOption((option) =>
         option
           .setName("discord_channel")
-          .setDescription("📨 ห้อง Discord ที่จะส่งแจ้งเตือน (ไม่ต้องใส่ = ห้องนี้)")
+          .setDescription("📨 Discord channel to send alerts to (omit = this channel)")
           .setRequired(false)
           .addChannelTypes(ChannelType.GuildText),
       )
       .addStringOption((option) =>
         option
           .setName("message")
-          .setDescription("ข้อความก่อน embed (เช่น @everyone) — ไม่บังคับ")
+          .setDescription("Message before the embed (e.g. @everyone) — optional")
           .setRequired(false),
       ),
   )
   .addSubcommand((subcommand) =>
     subcommand
       .setName("remove")
-      .setDescription("➖ ปิดการแจ้งเตือนในห้องนี้")
+      .setDescription("➖ Disable alerts in this channel")
       .addStringOption((option) =>
         option
           .setName("roblox_channel")
-          .setDescription("ช่อง Roblox ที่ต้องการปิดการแจ้งเตือน")
+          .setDescription("The Roblox channel to disable alerts for")
           .setRequired(true)
           .addChoices(
             ...ROBLOX_CHANNELS.map((channel) => ({
@@ -62,19 +62,19 @@ export const data = new SlashCommandBuilder()
       .addChannelOption((option) =>
         option
           .setName("discord_channel")
-          .setDescription("📨 ห้อง Discord ที่ต้องการปิดการแจ้งเตือน (ไม่ต้องใส่ = ห้องนี้)")
+          .setDescription("📨 Discord channel to disable alerts in (omit = this channel)")
           .setRequired(false)
           .addChannelTypes(ChannelType.GuildText),
       ),
   )
   .addSubcommand((subcommand) =>
-    subcommand.setName("list").setDescription("📋 ดูรายการแจ้งเตือนที่ตั้งไว้ในเซิร์ฟเวอร์นี้"),
+    subcommand.setName("list").setDescription("📋 View the alerts set up in this server"),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ ต้องมีสิทธิ์ Administrator ถึงจะจัดการการแจ้งเตือนได้",
+      content: "❌ You need Administrator permission to manage alerts",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -82,7 +82,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const subcommand = interaction.options.getSubcommand();
   if (!interaction.guildId || !interaction.channelId) {
     return interaction.reply({
-      content: "❌ คำสั่งนี้ใช้ได้เฉพาะใน Server เท่านั้น",
+      content: "❌ This command can only be used in a server",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -98,7 +98,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const botMember = interaction.guild?.members.me;
     if (!botMember) {
       return interaction.reply({
-        content: "❌ ไม่สามารถตรวจสอบสิทธิ์ของบอทในห้องนี้ได้",
+        content: "❌ Could not verify the bot's permissions in this channel",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -115,7 +115,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (!targetChannel || !targetChannel.isTextBased()) {
       return interaction.reply({
-        content: "❌ ใช้ได้เฉพาะห้องข้อความ (Text Channel) เท่านั้น",
+        content: "❌ Only text channels can be used",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -127,7 +127,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     ) {
       return interaction.reply({
         content:
-          "❌ บอทไม่มีสิทธิ์ **View Channel** และ **Send Messages** ในห้องนั้น กรุณาให้สิทธิ์ก่อนเปิดการแจ้งเตือน",
+          "❌ The bot lacks **View Channel** and **Send Messages** permissions in that channel. Please grant them before enabling alerts",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -150,7 +150,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     invalidateAlerts();
 
     return interaction.reply({
-      content: `✅ เปิดการแจ้งเตือน **${robloxChannel}** ในห้อง <#${targetChannelId}> แล้ว`,
+      content: `✅ Alerts for **${robloxChannel}** enabled in <#${targetChannelId}>`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -169,8 +169,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     return interaction.reply({
       content: result.changes
-        ? `✅ ปิดการแจ้งเตือน **${robloxChannel}** ในห้อง <#${targetChannelId}> แล้ว`
-        : "ℹ️ ไม่พบการแจ้งเตือนในห้องนี้",
+        ? `✅ Alerts for **${robloxChannel}** disabled in <#${targetChannelId}>`
+        : "ℹ️ No alerts found in this channel",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -193,7 +193,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (alerts.length === 0) {
       return interaction.reply({
-        content: "ℹ️ ยังไม่มีการตั้งค่าการแจ้งเตือน",
+        content: "ℹ️ No alerts have been set up yet",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -202,7 +202,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       content: alerts
         .map(
           (alert) =>
-            `• **${alert.robloxChannel}** → <#${alert.channelId}>${alert.customContent ? ` (ข้อความ: ${alert.customContent})` : ""}`,
+            `• **${alert.robloxChannel}** → <#${alert.channelId}>${alert.customContent ? ` (message: ${alert.customContent})` : ""}`,
         )
         .join("\n"),
       flags: MessageFlags.Ephemeral,

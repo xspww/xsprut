@@ -18,35 +18,35 @@ const NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6
 
 export const data = new SlashCommandBuilder()
   .setName("status")
-  .setDescription("🤖 จัดการสถานะของบอท")
+  .setDescription("🤖 Manage the bot's status")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((subcommand) =>
     subcommand
       .setName("add")
-      .setDescription("➕ เพิ่มข้อความสถานะของบอท (เพิ่มได้หลายข้อความ ระบบจะสลับวนอัตโนมัติ)")
+      .setDescription("➕ Add a bot status message (add multiple messages to rotate automatically)")
       .addStringOption((option) =>
         option
           .setName("text")
-          .setDescription("ข้อความสถานะที่ต้องการแสดง")
+          .setDescription("The status text to display")
           .setRequired(true),
       )
       .addStringOption((option) =>
         option
           .setName("url")
-          .setDescription("ลิงก์ Stream URL (ไม่บังคับ)")
+          .setDescription("Stream URL link (optional)")
           .setRequired(false),
       )
       .addStringOption((option) =>
         option
           .setName("custom")
-          .setDescription("ข้อความ Custom Status แสดงบนการ์ดโปรไฟล์ (ไม่บังคับ, ใส่ emoji ได้)")
+          .setDescription("Custom Status text shown on the profile card (optional, emoji allowed)")
           .setRequired(false),
       )
       .addStringOption((option) =>
         option
           .setName("interval")
           .setDescription(
-            `⏱️ ระยะเวลาที่แสดงข้อความนี้ก่อนสลับไปข้อความถัดไป (เช่น 30s, 1m, 5m; ค่าเริ่มต้น ${formatIntervalMs(STATUS_ROTATION_DEFAULT_INTERVAL_MS)})`,
+            `⏱️ Display duration before rotating (e.g. 30s, 1m, 5m; default ${formatIntervalMs(STATUS_ROTATION_DEFAULT_INTERVAL_MS)})`,
           )
           .setRequired(false),
       ),
@@ -54,21 +54,21 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((subcommand) =>
     subcommand
       .setName("remove")
-      .setDescription("🗑️ ล้างข้อความสถานะทั้งหมด — สถานะบอทจะถูกถอดออกถาวรจนกว่าจะใช้ /status add ใหม่"),
+      .setDescription("🗑️ Clear all status messages"),
   )
   .addSubcommand((subcommand) =>
-    subcommand.setName("list").setDescription("📋 ดูข้อความสถานะทั้งหมดที่ตั้งไว้"),
+    subcommand.setName("list").setDescription("📋 View all configured status messages"),
   )
   .addSubcommand((subcommand) =>
     subcommand
       .setName("refresh")
-      .setDescription("🔄 บังคับรีเฟรชสถานะบอทให้ตรงกับที่ตั้งไว้ทันที"),
+      .setDescription("🔄 Force-refresh the bot status immediately"),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ ต้องมีสิทธิ์ Administrator ถึงจะจัดการสถานะบอทได้",
+      content: "❌ Administrator permission is required to manage the bot status",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -79,7 +79,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const text = interaction.options.getString("text", true).trim();
     if (text === "") {
       return interaction.reply({
-        content: "❌ กรุณากรอกข้อความสถานะ (text) ด้วย",
+        content: "❌ Please provide a status message (text)",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -92,13 +92,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       const parsed = parseIntervalToMs(intervalRaw);
       if (parsed === null) {
         return interaction.reply({
-          content: `❌ รูปแบบ **interval** ไม่ถูกต้อง (ตัวอย่างที่ใช้ได้: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
+          content: `❌ Invalid **interval** format (valid examples: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
           flags: MessageFlags.Ephemeral,
         });
       }
       if (parsed < STATUS_ROTATION_MIN_INTERVAL_MS) {
         return interaction.reply({
-          content: `❌ interval ต้องไม่น้อยกว่า **${formatIntervalMs(STATUS_ROTATION_MIN_INTERVAL_MS)}**`,
+          content: `❌ interval must be at least **${formatIntervalMs(STATUS_ROTATION_MIN_INTERVAL_MS)}**`,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -113,13 +113,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const rotationNote =
       count.c > 1
-        ? `\n📋 ตอนนี้มีข้อความสถานะทั้งหมด **${count.c}** ข้อความ — ระบบจะสลับวนอัตโนมัติตามเวลาที่กำหนด`
-        : `\n📋 ตอนนี้มีข้อความสถานะ 1 ข้อความ — ใช้ /status add เพิ่มข้อความเพิ่มเพื่อให้สลับอัตโนมัติ`;
+        ? `\n📋 There are now **${count.c}** status messages in total — they will rotate automatically on schedule`
+        : `\n📋 There is now 1 status message — use /status add to add more so they rotate automatically`;
 
     return interaction.reply({
       content:
-        `✅ เพิ่มข้อความสถานะแล้ว: \`${text}\`${custom ? `\n💬 Custom Status: \`${custom}\`` : ""}` +
-        `\n⏱️ จะแสดงข้อความนี้ **${formatIntervalMs(intervalMs)}** แล้วสลับไปข้อความถัดไป${rotationNote}`,
+        `✅ Status message added: \`${text}\`${custom ? `\n💬 Custom Status: \`${custom}\`` : ""}` +
+        `\n⏱️ This message will be shown for **${formatIntervalMs(intervalMs)}** then rotate to the next one${rotationNote}`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -128,7 +128,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     resetBotStatus();
 
     return interaction.reply({
-      content: "✅ ล้างข้อความสถานะทั้งหมดแล้ว (สถานะของบอทถูกลบออกแล้ว)",
+      content: "✅ All status messages cleared (the bot status has been removed)",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -137,12 +137,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     refreshBotStatus();
 
     return interaction.reply({
-      content: "✅ รีเฟรชสถานะบอทเรียบร้อยแล้ว (แสดงตามข้อความที่ตั้งไว้)",
+      content: "✅ Bot status refreshed (now showing the configured message)",
       flags: MessageFlags.Ephemeral,
     });
   }
 
-  // list (เดิมคือ view)
+  // list (formerly view)
   const messages = db
     .prepare(
       `SELECT activityText, streamUrl, customStatus, intervalMs
@@ -154,7 +154,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (messages.length === 0) {
     return interaction.reply({
-      content: "ℹ️ ยังไม่ได้ตั้งค่าข้อความสถานะแบบกำหนดเอง (ใช้ /status add เพื่อเพิ่ม)",
+      content: "ℹ️ No custom status message configured yet (use /status add to add one)",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -163,7 +163,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const num = i < NUMBER_EMOJIS.length ? `${NUMBER_EMOJIS[i]} ` : `${i + 1}. `;
     const interval = formatIntervalMs(m.intervalMs || STATUS_ROTATION_DEFAULT_INTERVAL_MS);
     return (
-      `${num}\`${m.activityText}\` (สลับทุก **${interval}**)${
+      `${num}\`${m.activityText}\` (rotates every **${interval}**)${
         m.customStatus ? `\n   💬 Custom: \`${m.customStatus}\`` : ""
       }` +
       `\n   🔗 ${m.streamUrl}`
@@ -171,7 +171,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   });
 
   return interaction.reply({
-    content: `📋 ข้อความสถานะที่ตั้งไว้ (**${messages.length}** ข้อความ) — ระบบจะสลับวนอัตโนมัติตามเวลาที่กำหนด:\n${lines.join("\n")}`,
+    content: `📋 Configured status messages (**${messages.length}** messages) — they rotate automatically on schedule:\n${lines.join("\n")}`,
     flags: MessageFlags.Ephemeral,
   });
 }

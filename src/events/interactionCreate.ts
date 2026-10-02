@@ -40,9 +40,9 @@ export async function execute(interaction: Interaction) {
     if (allowed.length > 0 && !allowed.includes(interaction.user.id)) {
       try {
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: "คุณไม่ได้รับอนุญาตให้ใช้บอทนี้", flags: 64 });
+          await interaction.followUp({ content: "You are not authorized to use this bot", flags: 64 });
         } else {
-          await interaction.reply({ content: "คุณไม่ได้รับอนุญาตให้ใช้บอทนี้", flags: 64 });
+          await interaction.reply({ content: "You are not authorized to use this bot", flags: 64 });
         }
       } catch {}
       return;
@@ -53,9 +53,9 @@ export async function execute(interaction: Interaction) {
       logger.error(`No command matching ${interaction.commandName} was found.`);
       try {
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: "คำสั่งนี้ไม่พร้อมใช้งาน (ไม่พบคำสั่ง) ", flags: 64 });
+          await interaction.followUp({ content: "This command is unavailable (command not found)", flags: 64 });
         } else {
-          await interaction.reply({ content: "คำสั่งนี้ไม่พร้อมใช้งาน (ไม่พบคำสั่ง)", flags: 64 });
+          await interaction.reply({ content: "This command is unavailable (command not found)", flags: 64 });
         }
       } catch (e) {
         logger.warn(`Failed to notify about missing command ${interaction.commandName}:`, e);
@@ -75,7 +75,7 @@ export async function execute(interaction: Interaction) {
       if (remaining > 0) {
         try {
           await interaction.reply({
-            content: `⏳ คุณใช้คำสั่งนี้เร็วเกินไป กรุณารออีก **${formatCooldown(remaining)}** ก่อนลองใหม่`,
+            content: `⏳ You're using this command too quickly. Please wait **${formatCooldown(remaining)}** before trying again`,
             flags: 64,
           });
           // Auto-delete the warning after COOLDOWN_MESSAGE_TTL_MS so it never
@@ -109,9 +109,9 @@ export async function execute(interaction: Interaction) {
       );
       try {
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: "เกิดข้อผิดพลาดในการประมวลผลคำสั่งนี้!", flags: 64 });
+          await interaction.followUp({ content: "An error occurred while processing this command!", flags: 64 });
         } else {
-          await interaction.reply({ content: "เกิดข้อผิดพลาดในการประมวลผลคำสั่งนี้!", flags: 64 });
+          await interaction.reply({ content: "An error occurred while processing this command!", flags: 64 });
         }
       } catch (e) {
         logger.warn(`Failed to send error reply for ${interaction.commandName}:`, e);
@@ -140,7 +140,7 @@ export async function execute(interaction: Interaction) {
         if (!guildId) return;
         const cfg = getVerificationConfig(guildId);
         if (!cfg) {
-          return interaction.reply({ content: "❌ ระบบยืนยันตัวตนไม่ได้ตั้งค่าในเซิร์ฟเวอร์นี้", flags: 64 });
+          return interaction.reply({ content: "❌ Verification is not set up in this server", flags: 64 });
         }
 
         const code = createCaptchaSession(user.id);
@@ -181,7 +181,7 @@ export async function execute(interaction: Interaction) {
       } catch (err) {
         logger.error("Error in verify_start button handler:", err);
         try {
-          return interaction.reply({ content: "❌ เกิดข้อผิดพลาด กรุณาลองใหม่", flags: 64 });
+          return interaction.reply({ content: "❌ An error occurred, please try again", flags: 64 });
         } catch {}
       }
     }
@@ -211,25 +211,25 @@ export async function execute(interaction: Interaction) {
 
     const { user, guildId, guild } = interaction;
     if (!guildId || !guild) {
-      return interaction.reply({ content: "❌ ต้องใช้งานในเซิร์ฟเวอร์เท่านั้น", flags: 64 });
+      return interaction.reply({ content: "❌ This can only be used in a server", flags: 64 });
     }
 
     const cfg = getVerificationConfig(guildId);
     if (!cfg) {
-      return interaction.reply({ content: "❌ ระบบยืนยันตัวตนไม่ได้ตั้งค่าในเซิร์ฟเวอร์นี้", flags: 64 });
+      return interaction.reply({ content: "❌ Verification is not set up in this server", flags: 64 });
     }
 
     const inputCode = interaction.fields.getTextInputValue("captcha_input").trim();
     const result = validateCaptchaSession(user.id, inputCode);
 
     if (result === "expired") {
-      return interaction.reply({ content: "⏰ รหัสหมดอายุแล้ว กรุณากดปุ่ม **Verify** ใหม่อีกครั้ง", flags: 64 });
+      return interaction.reply({ content: "⏰ The code has expired. Please press **Verify** again", flags: 64 });
     }
     if (result === "not_found") {
-      return interaction.reply({ content: "❓ ไม่พบ Session กรุณากดปุ่ม **Verify** ใหม่", flags: 64 });
+      return interaction.reply({ content: "❓ Session not found. Please press **Verify** again", flags: 64 });
     }
     if (result === "wrong") {
-      return interaction.reply({ content: "❌ รหัสไม่ถูกต้อง กรุณากดปุ่ม **Verify** ใหม่อีกครั้ง", flags: 64 });
+      return interaction.reply({ content: "❌ Incorrect code. Please press **Verify** again", flags: 64 });
     }
 
     // ✅ Correct! Grant/remove roles
@@ -249,7 +249,7 @@ export async function execute(interaction: Interaction) {
     } catch (err) {
       logger.error(`Failed to assign verified role to ${user.id}:`, err);
       return interaction.reply({
-        content: "❌ เกิดข้อผิดพลาดในการให้ยศ กรุณาติดต่อแอดมิน",
+        content: "❌ Failed to assign the role. Please contact an admin",
         flags: 64,
       });
     }

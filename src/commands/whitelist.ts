@@ -12,39 +12,39 @@ const SNOWFLAKE_REGEX = /^\d{17,19}$/;
 
 export const data = new SlashCommandBuilder()
   .setName("whitelist")
-  .setDescription("🤖 จัดการ allowlist ของ Bot ที่ได้รับอนุญาตให้เข้าเซิร์ฟเวอร์")
+  .setDescription("🤖 Manage the allowlist of bots allowed to join the server")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .setDMPermission(false)
   .addSubcommand((subcommand) =>
     subcommand
       .setName("add")
-      .setDescription("➕ เพิ่ม Bot ID ลงใน allowlist")
+      .setDescription("➕ Add a Bot ID to the allowlist")
       .addStringOption((option) =>
         option
           .setName("bot_id")
-          .setDescription("Discord User ID ของบอทที่ต้องการอนุญาต")
+          .setDescription("Discord user ID of the bot to allow")
           .setRequired(true),
       ),
   )
   .addSubcommand((subcommand) =>
     subcommand
       .setName("remove")
-      .setDescription("➖ ลบ Bot ID ออกจาก allowlist")
+      .setDescription("➖ Remove a Bot ID from the allowlist")
       .addStringOption((option) =>
         option
           .setName("bot_id")
-          .setDescription("Discord User ID ของบอทที่ต้องการลบออกจาก allowlist")
+          .setDescription("Discord user ID of the bot to remove from the allowlist")
           .setRequired(true),
       ),
   )
   .addSubcommand((subcommand) =>
-    subcommand.setName("list").setDescription("📋 ดูรายชื่อ Bot ที่อยู่ใน allowlist"),
+    subcommand.setName("list").setDescription("📋 View the bots in the allowlist"),
   );
 
 function requireAdmin(interaction: ChatInputCommandInteraction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ ต้องมีสิทธิ์ Administrator ถึงจะจัดการ allowlist ได้",
+      content: "❌ Administrator permission is required to manage the allowlist",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -54,7 +54,7 @@ function requireAdmin(interaction: ChatInputCommandInteraction) {
 function requireGuild(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
     return interaction.reply({
-      content: "❌ คำสั่งนี้ใช้ได้เฉพาะใน Server เท่านั้น",
+      content: "❌ This command can only be used in a server",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -73,7 +73,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (!SNOWFLAKE_REGEX.test(rawId)) {
       return interaction.reply({
-        content: "❌ `bot_id` ต้องเป็น Discord ID (ตัวเลข 17–19 หลัก)",
+        content: "❌ `bot_id` must be a Discord ID (17–19 digits)",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -90,7 +90,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (isBot === false) {
       return interaction.reply({
-        content: `⚠️ <@${rawId}> ไม่ใช่บอท — กรุณาตรวจสอบ ID แล้วลองใหม่`,
+        content: `⚠️ <@${rawId}> is not a bot — please check the ID and try again`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -101,7 +101,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (existing) {
       return interaction.reply({
-        content: `ℹ️ Bot <@${rawId}> อยู่ใน allowlist ของเซิร์ฟเวอร์นี้อยู่แล้ว`,
+        content: `ℹ️ Bot <@${rawId}> is already in this server's allowlist`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -111,11 +111,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const embed = new EmbedBuilder()
       .setColor(0x22c55e)
-      .setTitle("✅ เพิ่ม Bot ลงใน allowlist แล้ว")
+      .setTitle("✅ Bot added to the allowlist")
       .setDescription(
-        `Bot <@${rawId}> ได้รับอนุญาตให้เข้าเซิร์ฟเวอร์นี้แล้ว\n\n` +
+        `Bot <@${rawId}> is now allowed to join this server\n\n` +
           `**Bot ID:** \`${rawId}\`\n` +
-          `**ผู้เพิ่ม:** <@${interaction.user.id}>`,
+          `**Added by:** <@${interaction.user.id}>`,
       )
       .setFooter({ text: "Diff Team" })
       .setTimestamp();
@@ -128,7 +128,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (!SNOWFLAKE_REGEX.test(rawId)) {
       return interaction.reply({
-        content: "❌ `bot_id` ต้องเป็น Discord ID (ตัวเลข 17–19 หลัก)",
+        content: "❌ `bot_id` must be a Discord ID (17–19 digits)",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -139,13 +139,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (result.changes === 0) {
       return interaction.reply({
-        content: `ℹ️ ไม่พบ Bot <@${rawId}> ใน allowlist ของเซิร์ฟเวอร์นี้`,
+        content: `ℹ️ Bot <@${rawId}> was not found in this server's allowlist`,
         flags: MessageFlags.Ephemeral,
       });
     }
 
     return interaction.reply({
-      content: `✅ ลบ Bot <@${rawId}> ออกจาก allowlist แล้ว — ครั้งถัดไปที่บอทนี้พยายามเข้าเซิร์ฟจะถูกเตะอัตโนมัติ`,
+      content: `✅ Bot <@${rawId}> removed from the allowlist — the next time this bot tries to join the server it will be kicked automatically`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -157,23 +157,23 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (rows.length === 0) {
     return interaction.reply({
-      content: "ℹ️ ยังไม่มี Bot อยู่ใน allowlist — ใช้ `/whitelist add` เพื่อเพิ่ม",
+      content: "ℹ️ No bots in the allowlist yet — use `/whitelist add` to add one",
       flags: MessageFlags.Ephemeral,
     });
   }
 
   const lines = rows.map((row, idx) => {
-    const addedDate = new Date(row.addedAt).toLocaleString("th-TH");
-    return `**${idx + 1}.** <@${row.botId}> — \`${row.botId}\`\n   • เพิ่มโดย <@${row.addedBy}> เมื่อ ${addedDate}`;
+    const addedDate = new Date(row.addedAt).toLocaleString("en-US");
+    return `**${idx + 1}.** <@${row.botId}> — \`${row.botId}\`\n   • Added by <@${row.addedBy}> on ${addedDate}`;
   });
 
   const description = lines.join("\n\n");
 
   const embed = new EmbedBuilder()
     .setColor(0x3b82f6)
-    .setTitle("🤖 รายชื่อ Bot ที่ได้รับอนุญาต")
+    .setTitle("🤖 Allowed bots")
     .setDescription(description)
-    .setFooter({ text: `Diff Team • ${rows.length} บอทใน allowlist` })
+    .setFooter({ text: `Diff Team • ${rows.length} bots in the allowlist` })
     .setTimestamp();
 
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });

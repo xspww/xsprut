@@ -19,48 +19,48 @@ import {
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
-  .setDescription("✅ จัดการระบบยืนยันตัวตน (Captcha Verification)")
+  .setDescription("✅ Manage the verification system (Captcha Verification)")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 
   // /verify setup
   .addSubcommand((sub) =>
     sub
       .setName("setup")
-      .setDescription("🔧 ตั้งค่าระบบยืนยันตัวตนในเซิร์ฟเวอร์")
+      .setDescription("🔧 Set up the verification system in this server")
       .addRoleOption((o) =>
         o
           .setName("verified_role")
-          .setDescription("🎖️ ยศที่จะให้เมื่อยืนยันสำเร็จ")
+          .setDescription("🎖️ Role to grant upon successful verification")
           .setRequired(true),
       )
       .addChannelOption((o) =>
         o
           .setName("channel")
-          .setDescription("📨 ห้องที่จะส่งป้ายยืนยันตัวตน (ค่าเริ่มต้น: ห้องปัจจุบัน)")
+          .setDescription("📨 Channel to send the verification panel to (default: current channel)")
           .setRequired(false),
       )
       .addRoleOption((o) =>
         o
           .setName("unverified_role")
-          .setDescription("🚫 ยศที่จะถอดออกเมื่อยืนยันสำเร็จ (เช่น Unverified)")
+          .setDescription("🚫 Role to remove upon successful verification (e.g. Unverified)")
           .setRequired(false),
       )
       .addStringOption((o) =>
         o
           .setName("title")
-          .setDescription("📋 หัวข้อของ Embed ป้ายยืนยัน (ค่าเริ่มต้น: Verify yourself)")
+          .setDescription("📋 Title of the verification panel embed (default: Verify yourself)")
           .setRequired(false),
       )
       .addStringOption((o) =>
         o
           .setName("description")
-          .setDescription("📝 รายละเอียดของ Embed ป้ายยืนยัน")
+          .setDescription("📝 Description of the verification panel embed")
           .setRequired(false),
       )
       .addStringOption((o) =>
         o
           .setName("success_message")
-          .setDescription("🎉 ข้อความแสดงเมื่อยืนยันสำเร็จ (ใช้ {server} แทนชื่อเซิร์ฟเวอร์)")
+          .setDescription("🎉 Message shown upon successful verification (use {server} for the server name)")
           .setRequired(false),
       ),
   )
@@ -69,7 +69,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("remove")
-      .setDescription("🗑️ ปิดการใช้งานระบบยืนยันตัวตนในเซิร์ฟเวอร์"),
+      .setDescription("🗑️ Disable the verification system in this server"),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -90,11 +90,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       "You're verified. Welcome to {server}!";
 
     if (!interaction.guildId) {
-      return interaction.editReply("❌ ต้องใช้งานในเซิร์ฟเวอร์เท่านั้น");
+      return interaction.editReply("❌ This can only be used in a server");
     }
 
     if (!targetChannel || !("send" in targetChannel)) {
-      return interaction.editReply("❌ ไม่สามารถส่งข้อความไปยังห้องนี้ได้");
+      return interaction.editReply("❌ Unable to send a message to this channel");
     }
 
     saveVerificationConfig({
@@ -132,30 +132,30 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
 
     const roleList = unverifiedRole
-      ? `✅ ให้: ${verifiedRole}\n🚫 ถอด: ${unverifiedRole}`
-      : `✅ ให้: ${verifiedRole}`;
+      ? `✅ Grant: ${verifiedRole}\n🚫 Remove: ${unverifiedRole}`
+      : `✅ Grant: ${verifiedRole}`;
 
     return interaction.editReply(
-      `✅ ตั้งค่าระบบยืนยันตัวตนเรียบร้อยแล้ว!\n${roleList}\n📨 ส่งป้ายยืนยันไปยัง ${targetChannel}`,
+      `✅ Verification system set up!\n${roleList}\n📨 Verification panel sent to ${targetChannel}`,
     );
   }
 
   if (sub === "remove") {
     if (!interaction.guildId) {
-      return interaction.reply({ content: "❌ ต้องใช้งานในเซิร์ฟเวอร์เท่านั้น", flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: "❌ This can only be used in a server", flags: MessageFlags.Ephemeral });
     }
 
     const existing = getVerificationConfig(interaction.guildId);
     if (!existing) {
       return interaction.reply({
-        content: "❌ ไม่มีการตั้งค่าระบบยืนยันตัวตนในเซิร์ฟเวอร์นี้",
+        content: "❌ No verification system is configured in this server",
         flags: MessageFlags.Ephemeral,
       });
     }
 
     disableVerificationConfig(interaction.guildId);
     return interaction.reply({
-      content: "✅ ปิดระบบยืนยันตัวตนเรียบร้อยแล้ว",
+      content: "✅ Verification system disabled",
       flags: MessageFlags.Ephemeral,
     });
   }

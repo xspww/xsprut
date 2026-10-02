@@ -11,21 +11,21 @@ import { clearDbCaches } from "../lib/dbCache";
 
 export const data = new SlashCommandBuilder()
   .setName("cleanup")
-  .setDescription("🧹 ล้างข้อมูล guild ที่บอทไม่ได้อยู่แล้ว (ไม่ต้อง restart)")
+  .setDescription("🧹 Clean up data for guilds the bot is no longer in (no restart needed)")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((sub) =>
-    sub.setName("run").setDescription("🧹 ล้างข้อมูล guild ที่บอทไม่ได้อยู่แล้วทันที"),
+    sub.setName("run").setDescription("🧹 Immediately clean up data for guilds the bot is no longer in"),
   )
   .addSubcommand((sub) =>
     sub
       .setName("preview")
-      .setDescription("👀 ดูตัวอย่าง guild ที่บอทไม่ได้อยู่แล้ว (ยังไม่ลบ)"),
+      .setDescription("👀 Preview guilds the bot is no longer in (without deleting)"),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ ต้องมีสิทธิ์ Administrator",
+      content: "❌ Administrator permission required",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -36,12 +36,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (sub === "preview") {
     if (orphaned.length === 0) {
       return interaction.reply({
-        content: "✅ ไม่มี guild ที่ต้องล้าง — ข้อมูลทั้งหมดเป็นของ guild ที่บอทยังอยู่",
+        content: "✅ Nothing to clean up — all data belongs to guilds the bot is still in",
         flags: MessageFlags.Ephemeral,
       });
     }
     return interaction.reply({
-      content: `📋 Guild ที่บอทไม่ได้อยู่แล้ว (จะถูกลบถ้ารัน \`/cleanup run\`):\n${orphaned
+      content: `📋 Guilds the bot is no longer in (will be deleted if you run \`/cleanup run\`):\n${orphaned
         .map((g) => `• \`${g}\``)
         .join("\n")}`,
       flags: MessageFlags.Ephemeral,
@@ -50,7 +50,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (orphaned.length === 0) {
     return interaction.reply({
-      content: "✅ ไม่มี guild ที่ต้องล้าง — ข้อมูลทั้งหมดเป็นของ guild ที่บอทยังอยู่",
+      content: "✅ Nothing to clean up — all data belongs to guilds the bot is still in",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -69,7 +69,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   clearDbCaches();
 
   return interaction.reply({
-    content: `🧹 ล้างข้อมูล ${orphaned.length} guild แล้ว (${deleted} แถว):\n${orphaned
+    content: `🧹 Cleaned up ${orphaned.length} guild(s) (${deleted} rows):\n${orphaned
       .map((g) => `• \`${g}\``)
       .join("\n")}`,
     flags: MessageFlags.Ephemeral,

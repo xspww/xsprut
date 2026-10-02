@@ -4,7 +4,7 @@ import logger from "../lib/logger";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
-  .setDescription("📖 แสดงคำสั่งและวิธีใช้งานบอท (แบ่งตามหมวดหมู่)")
+  .setDescription("📖 Show bot commands and usage (grouped by category)")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 interface HelpGroup {
@@ -45,7 +45,7 @@ const HELP_GROUPS: HelpGroup[] = [
   },
   {
     emoji: "🛡️",
-    name: "ความปลอดภัย",
+    name: "Security",
     entries: [
       "/protectroom setup",
       "/protectroom remove",
@@ -59,7 +59,7 @@ const HELP_GROUPS: HelpGroup[] = [
   },
   {
     emoji: "⚙️",
-    name: "อื่นๆ",
+    name: "Other",
     entries: [
       "/status add",
       "/status remove",
@@ -138,7 +138,7 @@ function chunkLines(name: string, lines: string[]): { name: string; value: strin
 
   for (const line of lines) {
     if ((chunk + "\n" + line).length > 1000) {
-      fields.push({ name: index === 1 ? name : `${name} (ต่อ)`, value: chunk });
+      fields.push({ name: index === 1 ? name : `${name} (continued)`, value: chunk });
       index++;
       chunk = line;
     } else {
@@ -147,7 +147,7 @@ function chunkLines(name: string, lines: string[]): { name: string; value: strin
   }
 
   if (chunk) {
-    fields.push({ name: index === 1 ? name : `${name} (ต่อ)`, value: chunk });
+    fields.push({ name: index === 1 ? name : `${name} (continued)`, value: chunk });
   }
   return fields;
 }
@@ -169,22 +169,22 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       fields.push(...chunkLines(`${group.emoji} ${group.name}`, lines));
     }
 
-    // Future-proofing: any registered command not curated above shows up in "อื่นๆ".
+    // Future-proofing: any registered command not curated above shows up in "Other".
     const uncategorized = Array.from(descMap.keys())
       .filter((path) => !coveredPaths.has(path))
       .sort((a, b) => a.localeCompare(b));
     if (uncategorized.length > 0) {
       fields.push(
         ...chunkLines(
-          "➕ เพิ่มเติม",
+          "➕ Additional",
           uncategorized.map((path) => `\`${path}\` — ${descMap.get(path)}`),
         ),
       );
     }
 
     const embed = new EmbedBuilder()
-      .setTitle("Diff Team — คำสั่งและวิธีใช้งาน")
-      .setDescription("กดคำสั่งแล้วเลือกตัวเลือกตามตัวอย่างได้เลย (ตัวเลือกที่ต้องกรอกจะบังคับให้ใส่เอง)\nคำสั่งทั้งหมดต้องมีสิทธิ์ **Administrator**")
+      .setTitle("Diff Team — Commands and usage")
+      .setDescription("Run a command and pick options as shown (required options must be filled in)\nAll commands require **Administrator** permission")
       .addFields(fields)
       .setColor(0x3b82f6)
       .setFooter({ text: "Diff Team" });
@@ -194,7 +194,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     logger.error("Error executing help command:", error);
     if (!interaction.replied && !interaction.deferred) {
       return interaction.reply({
-        content: "❌ เกิดข้อผิดพลาดในการโหลดคำสั่งช่วยเหลือ",
+        content: "❌ An error occurred while loading the help commands",
         flags: MessageFlags.Ephemeral,
       });
     }

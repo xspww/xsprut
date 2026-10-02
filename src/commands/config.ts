@@ -15,13 +15,13 @@ import {
 
 export const data = new SlashCommandBuilder()
   .setName("config")
-  .setDescription("⚙️ ดูภาพรวมการตั้งค่าทั้งหมดของเซิร์ฟเวอร์")
+  .setDescription("⚙️ View an overview of all server settings")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
     return interaction.reply({
-      content: "❌ ใช้คำสั่งนี้ได้เฉพาะใน Server เท่านั้น",
+      content: "❌ This command can only be used in a server",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -169,7 +169,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     .all(interaction.guildId) as { channelId: string; executorName: string; displayName: string }[];
 
   const embed = new EmbedBuilder()
-    .setTitle("📋 การตั้งค่าเซิร์ฟเวอร์")
+    .setTitle("📋 Server Settings")
     .setColor(0x3b82f6)
     .setTimestamp()
     .setFooter({ text: "Diff Team" });
@@ -177,13 +177,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   // ── Current Roblox versions (from channelState — no API call) ──────────
   const versionLines = (["LIVE", "ZBeta"] as const).map((ch) => {
     const st = getChannelState(ch);
-    if (!st) return `• **${ch}:** _ยังไม่เคยตรวจพบ_`;
+    if (!st) return `• **${ch}:** _Never detected_`;
     const numeric = st.version ? ` (${st.version})` : "";
     return `• **${ch}:** \`${st.currentVersion}\`${numeric}`;
   });
 
   embed.addFields({
-    name: "🎮 เวอร์ชัน Roblox ปัจจุบัน",
+    name: "🎮 Current Roblox Versions",
     value: versionLines.join("\n"),
     inline: false,
   });
@@ -204,25 +204,25 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   embed.addFields({
-    name: "🚨 การแจ้งเตือน Roblox",
-    value: robloxLines.length > 0 ? robloxLines.join("\n") : "_ยังไม่ได้ตั้งค่า_",
+    name: "🚨 Roblox Alerts",
+    value: robloxLines.length > 0 ? robloxLines.join("\n") : "_Not configured_",
     inline: false,
   });
 
   // ── Bot Voice Status ───────────────────────────────────────────────────
   const botVoiceText = botVoiceTracker
-    ? `• ${botVoiceTracker.voiceChannelId ? `<#${botVoiceTracker.voiceChannelId}>` : `Category \`${botVoiceTracker.categoryId}\``} (โหมด: **${botVoiceTracker.mode === "custom" ? `ตั้งชื่อเอง "${botVoiceTracker.displayName}"` : `เวอร์ชั่น Roblox ${botVoiceTracker.robloxChannel}`}**)`
-    : "_ยังไม่ได้ตั้งค่า_";
+    ? `• ${botVoiceTracker.voiceChannelId ? `<#${botVoiceTracker.voiceChannelId}>` : `Category \`${botVoiceTracker.categoryId}\``} (Mode: **${botVoiceTracker.mode === "custom" ? `Custom name "${botVoiceTracker.displayName}"` : `Roblox version ${botVoiceTracker.robloxChannel}`}**)`
+    : "_Not configured_";
 
   embed.addFields({
-    name: "🤖 ห้อง Voice สถานะบอท",
+    name: "🤖 Bot Status Voice Channel",
     value: botVoiceText,
     inline: false,
   });
 
   // ── Executor Voice Trackers ─────────────────────────────────────────────
   embed.addFields({
-    name: "🔊 ติดตามสถานะ Executor (Voice)",
+    name: "🔊 Executor Tracking (Voice)",
     value:
       voiceTrackers.length > 0
         ? voiceTrackers
@@ -231,13 +231,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
                 `• **${e.displayName}** (\`${e.executorName}\`) → ${e.voiceChannelId ? `<#${e.voiceChannelId}>` : `Category \`${e.categoryId}\``}`,
             )
             .join("\n")
-        : "_ยังไม่ได้ตั้งค่า_",
+        : "_Not configured_",
     inline: false,
   });
 
   // ── Executor Chat Status Trackers ────────────────────────────────────────
   embed.addFields({
-    name: "💬 ติดตามสถานะ Executor (Text)",
+    name: "💬 Executor Tracking (Text)",
     value:
       chatTrackers.length > 0
         ? chatTrackers
@@ -246,13 +246,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
                 `• **${e.displayName}** (\`${e.executorName}\`) → ${e.channelId ? `<#${e.channelId}>` : `Category \`${e.categoryId}\``}`,
             )
             .join("\n")
-        : "_ยังไม่ได้ตั้งค่า_",
+        : "_Not configured_",
     inline: false,
   });
 
   // ── Executor Embed Status Trackers ───────────────────────────────────────
   embed.addFields({
-    name: "📊 ติดตามสถานะ Executor (Embed)",
+    name: "📊 Executor Tracking (Embed)",
     value:
       embedTrackers.length > 0
         ? embedTrackers
@@ -261,7 +261,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
               return `• **${e.displayName}** (\`${e.executorName}\`) → <#${e.channelId}> (\`${interval}\`)`;
             })
             .join("\n")
-        : "_ยังไม่ได้ตั้งค่า_",
+        : "_Not configured_",
     inline: false,
   });
 
@@ -272,20 +272,20 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     .get(interaction.guildId) as { channelId: string; customMessage: string } | undefined;
 
   embed.addFields({
-    name: "👋 แจ้งเตือนสมาชิกใหม่",
+    name: "👋 New Member Alerts",
     value: joinAlert
       ? `• <#${joinAlert.channelId}>${joinAlert.customMessage.trim() ? ` — \`${joinAlert.customMessage}\`` : ""}`
-      : "_ยังไม่ได้ตั้งค่า_",
+      : "_Not configured_",
     inline: false,
   });
 
   // ── Executor Alert Channels ─────────────────────────────────────────────
   embed.addFields({
-    name: "📢 แจ้งเตือนการอัปเดต Executor",
+    name: "📢 Executor Update Alerts",
     value:
       execAlerts.length > 0
         ? execAlerts.map((a) => `• **${a.displayName}** (\`${a.executorName}\`) → <#${a.channelId}>`).join("\n")
-        : "_ยังไม่ได้ตั้งค่า_",
+        : "_Not configured_",
     inline: false,
   });
 

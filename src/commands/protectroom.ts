@@ -16,27 +16,27 @@ import {
 
 export const data = new SlashCommandBuilder()
   .setName("protectroom")
-  .setDescription("🛡️ ตั้งค่าห้องหลอก - แบน/ไทม์เอาท์อัตโนมัติเมื่อมีคนพิมพ์")
+  .setDescription("🛡️ Set up a decoy room - auto ban/timeout when someone types")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .setDMPermission(false)
   .addSubcommand((sub) =>
     sub
       .setName("setup")
-      .setDescription("🔧 ตั้งค่าห้องนี้ให้เป็นห้องป้องกัน")
+      .setDescription("🔧 Set this channel as a protected room")
       .addStringOption((option) =>
         option
           .setName("action")
-          .setDescription("การกระทำเมื่อมีคนพิมพ์ข้อความ")
+          .setDescription("Action to take when someone sends a message")
           .setRequired(true)
           .addChoices(
-            { name: "🔒 Ban (ถาวร)", value: "ban" },
-            { name: "⏱️ Timeout (กำหนดเวลาได้)", value: "timeout" }
+            { name: "🔒 Ban (permanent)", value: "ban" },
+            { name: "⏱️ Timeout (configurable duration)", value: "timeout" }
           )
       )
       .addIntegerOption((option) =>
         option
           .setName("timeout_minutes")
-          .setDescription("เวลา Timeout เป็นนาที (เฉพาะกรณีเลือก Timeout, ค่าเริ่มต้น: 60)")
+          .setDescription("Timeout duration in minutes (only when Timeout is selected, default: 60)")
           .setRequired(false)
           .setMinValue(1)
           .setMaxValue(40320)
@@ -45,12 +45,12 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("remove")
-      .setDescription("🔓 ยกเลิกการตั้งค่าห้องป้องกันสำหรับห้องนี้")
+      .setDescription("🔓 Remove the protected room setting for this channel")
   )
   .addSubcommand((sub) =>
     sub
       .setName("view")
-      .setDescription("📋 ดูสถานะการตั้งค่าห้องป้องกันของห้องนี้")
+      .setDescription("📋 View the protected room status of this channel")
   );
 
 export async function setProtectRoom(
@@ -60,7 +60,7 @@ export async function setProtectRoom(
 ) {
   if (!interaction.guildId || !interaction.channelId) {
     return interaction.reply({
-      content: "❌ คำสั่งนี้ใช้ได้เฉพาะในห้อง Server เท่านั้น",
+      content: "❌ This command can only be used in a server channel",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -73,7 +73,7 @@ export async function setProtectRoom(
 
   if (existing) {
     return interaction.reply({
-      content: `⚠️ ห้องนี้ถูกตั้งค่าเป็นห้องป้องกันอยู่แล้ว!`,
+      content: `⚠️ This channel is already set as a protected room!`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -93,17 +93,17 @@ export async function setProtectRoom(
 
   const embed = new EmbedBuilder()
     .setColor(0x2ecc71)
-    .setTitle("✅ ตั้งค่าห้องป้องกันเรียบร้อยแล้ว")
+    .setTitle("✅ Protected room set up successfully")
     .setDescription(
-      `<#${interaction.channelId}> ถูกตั้งค่าเป็นห้องป้องกัน\n\n` +
-      `**การลงโทษ:** ${PROTECT_ACTION_META[action].displayName}${action === "timeout" ? ` (${timeoutMinutes} นาที)` : ""}\n\n` +
-      `**กฎ:**\n` +
-      `• หากมีการพิมพ์ข้อความใดๆ จะถูกลงโทษทันที\n` +
-      `• ข้อความทั้งหมดของผู้ใช้รายนั้นในช่วง 1 นาทีที่ผ่านมาจะถูกลบ\n` +
-      `• ไม่มีข้อยกเว้น ยกเว้น Guild Owner หรือ Administrator\n\n` +
+      `<#${interaction.channelId}> has been set as a protected room\n\n` +
+      `**Punishment:** ${PROTECT_ACTION_META[action].displayName}${action === "timeout" ? ` (${timeoutMinutes} minutes)` : ""}\n\n` +
+      `**Rules:**\n` +
+      `• Anyone who sends any message will be punished immediately\n` +
+      `• All messages from that user in the last 1 minute will be deleted\n` +
+      `• No exceptions, except for the Guild Owner or Administrators\n\n` +
       (noticeMessageId
-        ? `📌 ได้โพสต์ป้ายเตือนในห้องนี้แล้ว — จำนวนคนที่ถูกลงโทษจะอัปเดตที่ป้ายโดยอัตโนมัติ`
-        : `⚠️ ไม่สามารถโพสต์ป้ายเตือนในห้องนี้ได้ (ตรวจสอบสิทธิ์ Send Messages)`)
+        ? `📌 A warning sign has been posted in this channel — the punished user count will update on the sign automatically`
+        : `⚠️ Could not post the warning sign in this channel (check the Send Messages permission)`)
     )
     .setTimestamp();
 
@@ -114,7 +114,7 @@ export async function setProtectRoom(
 export async function removeProtectRoom(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId || !interaction.channelId) {
     return interaction.reply({
-      content: "❌ คำสั่งนี้ใช้ได้เฉพาะในห้อง Server เท่านั้น",
+      content: "❌ This command can only be used in a server channel",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -127,7 +127,7 @@ export async function removeProtectRoom(interaction: ChatInputCommandInteraction
 
   if (!existing) {
     return interaction.reply({
-      content: `⚠️ ห้องนี้ยังไม่ได้ตั้งค่าเป็นห้องป้องกัน!`,
+      content: `⚠️ This channel is not set as a protected room yet!`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -143,7 +143,7 @@ export async function removeProtectRoom(interaction: ChatInputCommandInteraction
 
   logger.info(`[PROTECT] Channel ${interaction.channelId} in guild ${interaction.guildId} unprotected by ${interaction.user.tag}`);
   return interaction.reply({
-    content: `✅ ยกเลิกการตั้งค่าห้องป้องกันสำหรับ <#${interaction.channelId}> เรียบร้อยแล้ว`,
+    content: `✅ Protected room setting removed for <#${interaction.channelId}> successfully`,
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -151,7 +151,7 @@ export async function removeProtectRoom(interaction: ChatInputCommandInteraction
 export async function statusProtectRoom(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId || !interaction.channelId) {
     return interaction.reply({
-      content: "❌ คำสั่งนี้ใช้ได้เฉพาะในห้อง Server เท่านั้น",
+      content: "❌ This command can only be used in a server channel",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -162,18 +162,18 @@ export async function statusProtectRoom(interaction: ChatInputCommandInteraction
 
   if (!existing) {
     return interaction.reply({
-      content: `ℹ️ ห้องนี้ไม่ได้เป็นห้องป้องกัน`,
+      content: `ℹ️ This channel is not a protected room`,
       flags: MessageFlags.Ephemeral,
     });
   }
 
   const embed = new EmbedBuilder()
     .setColor(0x3498db)
-    .setTitle("🛡️ สถานะห้องป้องกัน")
+    .setTitle("🛡️ Protected room status")
     .setDescription(
-      `ห้อง <#${interaction.channelId}> เปิดใช้งานระบบห้องป้องกันอยู่\n\n` +
-      `**การลงโทษ:** ${PROTECT_ACTION_META[existing.actionType].displayName}${existing.actionType === "timeout" ? ` (${existing.timeoutDuration / (60 * 1000)} นาที)` : ""}\n` +
-      `**จำนวนคนที่ถูกลงโทษแล้ว:** ${existing.actionCount}`
+      `Channel <#${interaction.channelId}> has the protected room system enabled\n\n` +
+      `**Punishment:** ${PROTECT_ACTION_META[existing.actionType].displayName}${existing.actionType === "timeout" ? ` (${existing.timeoutDuration / (60 * 1000)} minutes)` : ""}\n` +
+      `**Users punished so far:** ${existing.actionCount}`
     )
     .setTimestamp();
 

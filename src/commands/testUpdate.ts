@@ -21,12 +21,12 @@ import { sendV2Message } from "../lib/v2Message";
 
 export const data = new SlashCommandBuilder()
   .setName("test")
-  .setDescription("🧪 ทดสอบระบบแจ้งเตือน")
+  .setDescription("🧪 Test the alert system")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption((option) =>
     option
       .setName("type")
-      .setDescription("เลือกประเภทการแจ้งเตือนที่ต้องการทดสอบ")
+      .setDescription("Select the alert type to test")
       .setRequired(true)
       .addChoices(
         { name: "🟥 Roblox Update — LIVE", value: "roblox-live" },
@@ -60,7 +60,7 @@ async function fetchRealVersionData(channel: string): Promise<{ hash: string; ve
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ ต้องมีสิทธิ์ Administrator",
+      content: "❌ Administrator permission is required",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -73,14 +73,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const configured = getAlerts("LIVE", interaction.guildId ?? undefined);
     if (configured.length === 0) {
       return interaction.editReply(
-        "⚠️ ยังไม่มีช่องที่ตั้งรับ Roblox update \n\n" +
-          "บอทจะ**ไม่ส่งข้อความ**เมื่อ Roblox อัปเดต เพราะยังไม่มี alert ตั้งไว้\n" +
-          "ใช้คำสั่งนี้ในห้องที่ต้องการรับแจ้งเตือน: `/robloxalert add roblox_channel:LIVE` แล้วลอง `/test` ใหม่อีกครั้ง",
+        "⚠️ No channel is configured to receive Roblox updates \n\n" +
+          "The bot will **not send any message** when Roblox updates because no alert is configured\n" +
+          "Run this command in the channel you want to receive alerts in: `/robloxalert add roblox_channel:LIVE`, then try `/test` again",
       );
     }
     await sendUpdate(hash, "LIVE", version, interaction.guildId ?? undefined);
     return interaction.editReply(
-      `✅ ส่งข้อความทดสอบ **Roblox LIVE Update** ด้วยเวอร์ชันจริง \`${hash}\` เรียบร้อยแล้ว`,
+      `✅ Test **Roblox LIVE Update** message sent with the real version \`${hash}\``,
     );
   }
 
@@ -89,12 +89,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const configured = getAlerts("ZBeta", interaction.guildId ?? undefined);
     if (configured.length === 0) {
       return interaction.editReply(
-        "⚠️ ยังไม่มีช่องที่ตั้งรับ ZBeta — ใช้ `/robloxalert add roblox_channel:ZBeta` ก่อน แล้วลอง `/test` ใหม่อีกครั้ง",
+        "⚠️ No channel is configured to receive ZBeta — use `/robloxalert add roblox_channel:ZBeta` first, then try `/test` again",
       );
     }
     await sendPreUpdate(hash, "ZBeta", version, interaction.guildId ?? undefined);
     return interaction.editReply(
-      `✅ ส่งข้อความทดสอบ **Roblox ZBeta Update** ด้วยเวอร์ชันจริง \`${hash}\` เรียบร้อยแล้ว`,
+      `✅ Test **Roblox ZBeta Update** message sent with the real version \`${hash}\``,
     );
   }
 
@@ -125,7 +125,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       }
 
       return interaction.editReply(
-        `✅ ส่งข้อความทดสอบ **Executor Alert** ไปยังห้องแจ้งเตือนที่ตั้งค่าไว้ (${configuredAlerts.length} รายการ) ในเซิร์ฟเวอร์นี้เรียบร้อยแล้ว`,
+        `✅ Test **Executor Alert** message sent to the configured alert channels (${configuredAlerts.length} entries) in this server`,
       );
     }
 
@@ -150,10 +150,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const ch = interaction.channel;
     if (ch?.isTextBased() && ch.isSendable()) {
       await ch.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
-      return interaction.editReply(`✅ ส่งข้อความทดสอบ **Executor Alert** (${workingSample.title}) ลงในห้องนี้เรียบร้อยแล้ว`);
+      return interaction.editReply(`✅ Test **Executor Alert** (${workingSample.title}) message sent in this channel`);
     }
 
-    return interaction.editReply(`❌ ไม่สามารถส่งข้อความไปยังห้องนี้ได้`);
+    return interaction.editReply(`❌ Unable to send a message to this channel`);
   }
 
   if (type === "joinalert") {
@@ -176,7 +176,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     if (!target?.isTextBased() || !target.isSendable()) {
-      return interaction.editReply("❌ ไม่สามารถส่งข้อความไปยังห้องนี้ได้");
+      return interaction.editReply("❌ Unable to send a message to this channel");
     }
 
     const me = interaction.user;
@@ -192,7 +192,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       allowedMentions: { users: [me.id] },
     });
 
-    const where = cfg ? `<#${cfg.channelId}>` : "ห้องนี้";
-    return interaction.editReply(`✅ ส่งข้อความทดสอบ **Join Alert** ลงใน ${where} เรียบร้อยแล้ว`);
+    const where = cfg ? `<#${cfg.channelId}>` : "this channel";
+    return interaction.editReply(`✅ Test **Join Alert** message sent in ${where}`);
   }
 }

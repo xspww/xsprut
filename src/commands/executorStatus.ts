@@ -28,72 +28,72 @@ import {
 
 export const data = new SlashCommandBuilder()
   .setName("ex")
-  .setDescription("🎛️ จัดการระบบติดตาม Executor และสถานะ")
+  .setDescription("🎛️ Manage the Executor tracking and status system")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 
   // ─── /ex track ─────────────────────────────────────────────────────────
   .addSubcommandGroup((group) =>
     group
       .setName("track")
-      .setDescription("📡 ระบบติดตามสถานะและการอัปเดตของ Executor")
+      .setDescription("📡 Executor status and update tracking system")
       .addSubcommand((sub) =>
         sub
           .setName("add")
-          .setDescription("➕ เพิ่มระบบติดตาม Executor")
+          .setDescription("➕ Add an Executor tracker")
           .addStringOption((o) =>
             o
               .setName("display")
-              .setDescription("🎨 รูปแบบการแสดงผล")
+              .setDescription("🎨 Display format")
               .setRequired(true)
               .addChoices(
-                { name: "🔊 Voice Channel — เปลี่ยนชื่อห้องตามสถานะ", value: "voice" },
-                { name: "💬 Text Channel — เปลี่ยนชื่อห้องตามสถานะ", value: "chat" },
-                { name: "📊 Embed Status — สร้าง Embed แสดงสถานะและอัปเดตทุก 1 นาที", value: "embed" },
-                { name: "📢 Alert Message — ส่งข้อความแจ้งเตือนเมื่อมีการอัปเดต", value: "alert" },
+                { name: "🔊 Voice Channel — Rename channel by status", value: "voice" },
+                { name: "💬 Text Channel — Rename channel by status", value: "chat" },
+                { name: "📊 Embed Status — Create a status embed updated every 1 minute", value: "embed" },
+                { name: "📢 Alert Message — Send an alert message on updates", value: "alert" },
               ),
           )
           .addStringOption((o) =>
             o
               .setName("executor")
-              .setDescription("🔍 ชื่อ Executor (พิมพ์เพื่อค้นหา)")
+              .setDescription("🔍 Executor name (type to search)")
               .setRequired(true)
               .setAutocomplete(true),
           )
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("📨 ห้องข้อความ (สำหรับโหมด Alert Message / Embed Status)")
+              .setDescription("📨 Text channel (for Alert Message / Embed Status mode)")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildText),
           )
           .addStringOption((o) =>
             o
               .setName("content")
-              .setDescription("💬 ข้อความ ก่อน Embed (ไม่บังคับ)")
+              .setDescription("💬 Message before the embed (optional)")
               .setRequired(false),
           )
           .addChannelOption((o) =>
             o
               .setName("category")
-              .setDescription("📁 หมวดหมู่/Category (สำหรับโหมด Voice/Text Channel เพื่อสร้างห้องย่อย)")
+              .setDescription("📁 Category (for Voice/Text Channel mode, to create a sub-channel)")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildCategory),
           )
           .addStringOption((o) =>
             o
               .setName("interval")
-              .setDescription("⏱️ ความถี่ Auto-updated ของ Embed (เช่น 30s, 1m, 5m; min 10s, max 1h)")
+              .setDescription("⏱️ Embed auto-update frequency (e.g. 30s, 1m, 5m; min 10s, max 1h)")
               .setRequired(false),
           ),
       )
       .addSubcommand((sub) =>
         sub
           .setName("remove")
-          .setDescription("🗑️ ลบระบบติดตาม Executor")
+          .setDescription("🗑️ Remove an Executor tracker")
           .addStringOption((o) =>
             o
               .setName("display")
-              .setDescription("🎨 รูปแบบการแสดงผลที่ต้องการลบ")
+              .setDescription("🎨 Display format to remove")
               .setRequired(true)
               .addChoices(
                 { name: "🔊 Voice Channel", value: "voice" },
@@ -105,14 +105,14 @@ export const data = new SlashCommandBuilder()
           .addStringOption((o) =>
             o
               .setName("executor")
-              .setDescription("🔍 ชื่อ Executor (พิมพ์เพื่อค้นหา)")
+              .setDescription("🔍 Executor name (type to search)")
               .setRequired(true)
               .setAutocomplete(true),
           )
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("📨 ห้องข้อความ (สำหรับโหมด Alert Message / Embed Status)")
+              .setDescription("📨 Text channel (for Alert Message / Embed Status mode)")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildText),
           ),
@@ -120,32 +120,32 @@ export const data = new SlashCommandBuilder()
       .addSubcommand((sub) =>
         sub
           .setName("edit")
-          .setDescription("✏️ แก้ไขข้อความหรือความถี่การอัปเดตของ Embed Status / Alert")
+          .setDescription("✏️ Edit the message or update frequency of Embed Status / Alert")
           .addStringOption((o) =>
             o
               .setName("executor")
-              .setDescription("🔍 ชื่อ Executor (พิมพ์เพื่อค้นหา)")
+              .setDescription("🔍 Executor name (type to search)")
               .setRequired(true)
               .setAutocomplete(true),
           )
           .addStringOption((o) =>
             o
               .setName("content")
-              .setDescription("💬 ข้อความก่อน Embed ใหม่ (ไม่บังคับ)")
+              .setDescription("💬 New message before the embed (optional)")
               .setRequired(false),
           )
           .addStringOption((o) =>
             o
               .setName("interval")
-              .setDescription("⏱️ ความถี่ Auto-updated ใหม่ของ Embed (เช่น 30s, 1m, 5m)")
+              .setDescription("⏱️ New embed auto-update frequency (e.g. 30s, 1m, 5m)")
               .setRequired(false),
           ),
       )
       .addSubcommand((sub) =>
-        sub.setName("list").setDescription("📋 ดูรายการ Executor ที่ตั้งค่าไว้ทั้งหมด (แยกตามรูปแบบ)"),
+        sub.setName("list").setDescription("📋 View all configured Executors (grouped by format)"),
       )
       .addSubcommand((sub) =>
-        sub.setName("refresh").setDescription("🔄 บังคับอัปเดตสถานะและ Embed ทุกระบบทันที"),
+        sub.setName("refresh").setDescription("🔄 Force-update all statuses and embeds immediately"),
       ),
   )
 
@@ -153,45 +153,45 @@ export const data = new SlashCommandBuilder()
   .addSubcommandGroup((group) =>
     group
       .setName("voice")
-      .setDescription("🔊 ห้อง Voice ที่บอทเข้าอยู่ตลอด 24/7 พร้อมแสดงสถานะ")
+      .setDescription("🔊 Voice channel the bot stays in 24/7 with status display")
       .addSubcommand((sub) =>
         sub
           .setName("add")
-          .setDescription("➕ ตั้งค่าห้อง Voice ให้บอทเข้าอยู่")
+          .setDescription("➕ Set up a voice channel for the bot to stay in")
           .addStringOption((o) =>
             o
               .setName("mode")
-              .setDescription("🎨 รูปแบบชื่อห้อง")
+              .setDescription("🎨 Channel name format")
               .setRequired(true)
               .addChoices(
-                { name: "✏️ Custom — ตั้งชื่อห้องเอง", value: "custom" },
-                { name: "🎮 Roblox Version — แสดงเวอร์ชัน Roblox", value: "roblox-version" },
+                { name: "✏️ Custom — Set a custom channel name", value: "custom" },
+                { name: "🎮 Roblox Version — Show the Roblox version", value: "roblox-version" },
               ),
           )
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("🔊 เลือกห้อง Voice ที่มีอยู่แล้ว")
+              .setDescription("🔊 Select an existing voice channel")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildVoice),
           )
           .addChannelOption((o) =>
             o
               .setName("category")
-              .setDescription("📁 หรือเลือก Category เพื่อให้บอทสร้างห้องใหม่")
+              .setDescription("📁 Or select a category for the bot to create a new channel")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildCategory),
           )
           .addStringOption((o) =>
             o
               .setName("display_name")
-              .setDescription("✏️ ชื่อห้องที่ต้องการ (สำหรับโหมด Custom)")
+              .setDescription("✏️ Desired channel name (for Custom mode)")
               .setRequired(false),
           )
           .addStringOption((o) =>
             o
               .setName("roblox_channel")
-              .setDescription("📡 เลือกช่อง Roblox (สำหรับโหมด Roblox Version)")
+              .setDescription("📡 Select a Roblox channel (for Roblox Version mode)")
               .setRequired(false)
               .addChoices(
                 { name: "🟢 LIVE", value: "LIVE" },
@@ -200,13 +200,13 @@ export const data = new SlashCommandBuilder()
           ),
       )
       .addSubcommand((sub) =>
-        sub.setName("remove").setDescription("🗑️ ลบห้อง Voice ของบอท"),
+        sub.setName("remove").setDescription("🗑️ Remove the bot voice channel"),
       )
       .addSubcommand((sub) =>
-        sub.setName("list").setDescription("📋 ดูการตั้งค่าห้อง Voice ของบอทปัจจุบัน"),
+        sub.setName("list").setDescription("📋 View the current bot voice channel settings"),
       )
       .addSubcommand((sub) =>
-        sub.setName("refresh").setDescription("🔄 บังคับอัปเดตห้อง Voice ของบอททันที"),
+        sub.setName("refresh").setDescription("🔄 Force-update the bot voice channel immediately"),
       ),
   )
 
@@ -214,45 +214,45 @@ export const data = new SlashCommandBuilder()
   .addSubcommandGroup((group) =>
     group
       .setName("chat")
-      .setDescription("💬 ห้อง Chat ที่เปลี่ยนชื่อตาม Roblox Version อัตโนมัติ")
+      .setDescription("💬 Chat channel renamed automatically by Roblox version")
       .addSubcommand((sub) =>
         sub
           .setName("add")
-          .setDescription("➕ ตั้งค่าห้อง Chat ให้เปลี่ยนชื่อตาม Roblox Version")
+          .setDescription("➕ Set up a chat channel renamed by Roblox version")
           .addStringOption((o) =>
             o
               .setName("mode")
-              .setDescription("🎨 รูปแบบชื่อห้อง")
+              .setDescription("🎨 Channel name format")
               .setRequired(true)
               .addChoices(
-                { name: "✏️ Custom — ตั้งชื่อห้องเอง", value: "custom" },
-                { name: "🎮 Roblox Version — แสดงเวอร์ชัน Roblox", value: "roblox-version" },
+                { name: "✏️ Custom — Set a custom channel name", value: "custom" },
+                { name: "🎮 Roblox Version — Show the Roblox version", value: "roblox-version" },
               ),
           )
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("💬 เลือกห้องข้อความที่มีอยู่แล้ว")
+              .setDescription("💬 Select an existing text channel")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildText),
           )
           .addChannelOption((o) =>
             o
               .setName("category")
-              .setDescription("📁 หรือเลือก Category เพื่อให้บอทสร้างห้องใหม่")
+              .setDescription("📁 Or select a category for the bot to create a new channel")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildCategory),
           )
           .addStringOption((o) =>
             o
               .setName("display_name")
-              .setDescription("✏️ ชื่อห้องที่ต้องการ (สำหรับโหมด Custom)")
+              .setDescription("✏️ Desired channel name (for Custom mode)")
               .setRequired(false),
           )
           .addStringOption((o) =>
             o
               .setName("roblox_channel")
-              .setDescription("📡 เลือกช่อง Roblox (สำหรับโหมด Roblox Version)")
+              .setDescription("📡 Select a Roblox channel (for Roblox Version mode)")
               .setRequired(false)
               .addChoices(
                 { name: "🟢 LIVE", value: "LIVE" },
@@ -261,13 +261,13 @@ export const data = new SlashCommandBuilder()
           ),
       )
       .addSubcommand((sub) =>
-        sub.setName("remove").setDescription("🗑️ ลบห้อง Chat ของบอท"),
+        sub.setName("remove").setDescription("🗑️ Remove the bot chat channel"),
       )
       .addSubcommand((sub) =>
-        sub.setName("list").setDescription("📋 ดูการตั้งค่าห้อง Chat ของบอทปัจจุบัน"),
+        sub.setName("list").setDescription("📋 View the current bot chat channel settings"),
       )
       .addSubcommand((sub) =>
-        sub.setName("refresh").setDescription("🔄 บังคับอัปเดตชื่อห้อง Chat ของบอททันที"),
+        sub.setName("refresh").setDescription("🔄 Force-update the bot chat channel name immediately"),
       ),
   );
 
@@ -290,14 +290,14 @@ export async function autocomplete(interaction: AutocompleteInteraction) {
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ ต้องมีสิทธิ์ Administrator",
+      content: "❌ Administrator permission required",
       flags: MessageFlags.Ephemeral,
     });
   }
 
   if (!interaction.guildId) {
     return interaction.reply({
-      content: "❌ ใช้คำสั่งนี้ได้เฉพาะใน Server เท่านั้น",
+      content: "❌ This command can only be used in a server",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -309,7 +309,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (group === "track") {
     if (sub === "add") {
       const display = interaction.options.getString("display", true);
-      // ใช้ชื่อ executor (จาก WEAO) เป็นชื่อที่แสดงโดยตรง — ไม่ต้องกรอก display_name
+      // Use the executor name (from WEAO) directly as the display name — no display_name input needed
       const executorName = interaction.options.getString("executor", true);
       const channel = interaction.options.getChannel("channel", false);
       const category = interaction.options.getChannel("category", false);
@@ -317,7 +317,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       if (display === "alert") {
         if (!channel) {
           return interaction.reply({
-            content: "❌ กรุณาระบุ **channel** (ห้องข้อความ) สำหรับการแจ้งเตือน",
+            content: "❌ Please specify a **channel** (text channel) for alerts",
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -330,7 +330,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         invalidateExecutorAlerts();
 
         return interaction.reply({
-          content: `✅ ตั้งค่า Alert Message สำหรับ **${executorName}** ลงห้อง <#${channel.id}> เรียบร้อยแล้ว`,
+          content: `✅ Alert Message for **${executorName}** in <#${channel.id}> has been set up`,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -338,7 +338,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       if (display === "embed") {
         if (!channel) {
           return interaction.reply({
-            content: "❌ กรุณาระบุ **channel** (ห้องข้อความ) สำหรับ Embed Status",
+            content: "❌ Please specify a **channel** (text channel) for Embed Status",
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -350,19 +350,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           const parsed = parseIntervalToMs(intervalRaw);
           if (parsed === null) {
             return interaction.reply({
-              content: `❌ รูปแบบ **interval** ไม่ถูกต้อง (ตัวอย่างที่ใช้ได้: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
+              content: `❌ Invalid **interval** format (valid examples: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
               flags: MessageFlags.Ephemeral,
             });
           }
           if (parsed < EMBED_REFRESH_INTERVAL_MIN_MS) {
             return interaction.reply({
-              content: `❌ interval ต้องไม่น้อยกว่า **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MIN_MS)}**`,
+              content: `❌ Interval must be at least **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MIN_MS)}**`,
               flags: MessageFlags.Ephemeral,
             });
           }
           if (parsed > EMBED_REFRESH_INTERVAL_MAX_MS) {
             return interaction.reply({
-              content: `❌ interval ต้องไม่มากกว่า **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MAX_MS)}**`,
+              content: `❌ Interval must be at most **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MAX_MS)}**`,
               flags: MessageFlags.Ephemeral,
             });
           }
@@ -379,14 +379,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         await forceRefreshEmbeds();
 
         return interaction.editReply(
-          `✅ ตั้งค่า Status Embed สำหรับ **${executorName}** ลงห้อง <#${channel.id}> เรียบร้อยแล้ว (Auto-updated ทุก **${formatIntervalMs(intervalMs)}**)`,
+          `✅ Status embed for **${executorName}** in <#${channel.id}> has been set up (auto-updates every **${formatIntervalMs(intervalMs)}**)`,
         );
       }
 
       if (display === "voice" || display === "chat") {
         if (!category) {
           return interaction.reply({
-            content: "❌ กรุณาระบุ **category** (หมวดหมู่) สำหรับให้บอทสร้างห้อง",
+            content: "❌ Please specify a **category** for the bot to create a channel in",
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -413,7 +413,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         }
 
         return interaction.editReply(
-          `✅ ตั้งค่า ${display === "voice" ? "Voice" : "Text"} Status สำหรับ **${executorName}** ใน Category \`${category.id}\` เรียบร้อยแล้ว`,
+          `✅ ${display === "voice" ? "Voice" : "Text"} Status for **${executorName}** in category \`${category.id}\` has been set up`,
         );
       }
     }
@@ -450,8 +450,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
         return interaction.reply({
           content: result.changes
-            ? `✅ ลบ Embed Status ของ **${executorName}** เรียบร้อยแล้ว`
-            : `❌ ไม่พบการตั้งค่า Embed Status สำหรับ **${executorName}**`,
+            ? `✅ Embed Status for **${executorName}** has been removed`
+            : `❌ No Embed Status configuration found for **${executorName}**`,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -468,8 +468,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
         return interaction.reply({
           content: result.changes
-            ? `✅ ลบการแจ้งเตือน **${executorName}** ออกจาก Alert Message เรียบร้อยแล้ว`
-            : `❌ ไม่พบการตั้งค่า Alert Message สำหรับ **${executorName}**`,
+            ? `✅ Alerts for **${executorName}** have been removed from Alert Messages`
+            : `❌ No Alert Message configuration found for **${executorName}**`,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -497,8 +497,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
         return interaction.reply({
           content: result.changes
-            ? `✅ ลบ ${display === "voice" ? "Voice" : "Text"} Status ของ **${executorName}** เรียบร้อยแล้ว`
-            : `❌ ไม่พบการตั้งค่า ${display === "voice" ? "Voice" : "Text"} Status สำหรับ **${executorName}**`,
+            ? `✅ ${display === "voice" ? "Voice" : "Text"} Status for **${executorName}** has been removed`
+            : `❌ No ${display === "voice" ? "Voice" : "Text"} Status configuration found for **${executorName}**`,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -512,7 +512,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       if (newContent === null && newIntervalRaw === null) {
         return interaction.reply({
-          content: "❌ กรุณาระบุข้อมูลอย่างน้อย 1 อย่างที่ต้องการแก้ไข (**content** หรือ **interval**)",
+          content: "❌ Please specify at least one thing to edit (**content** or **interval**)",
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -522,19 +522,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         const parsed = parseIntervalToMs(newIntervalRaw);
         if (parsed === null) {
           return interaction.reply({
-            content: `❌ รูปแบบ **interval** ไม่ถูกต้อง (ตัวอย่างที่ใช้ได้: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
+            content: `❌ Invalid **interval** format (valid examples: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
             flags: MessageFlags.Ephemeral,
           });
         }
         if (parsed < EMBED_REFRESH_INTERVAL_MIN_MS) {
           return interaction.reply({
-            content: `❌ interval ต้องไม่น้อยกว่า **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MIN_MS)}**`,
+            content: `❌ Interval must be at least **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MIN_MS)}**`,
             flags: MessageFlags.Ephemeral,
           });
         }
         if (parsed > EMBED_REFRESH_INTERVAL_MAX_MS) {
           return interaction.reply({
-            content: `❌ interval ต้องไม่มากกว่า **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MAX_MS)}**`,
+            content: `❌ Interval must be at most **${formatIntervalMs(EMBED_REFRESH_INTERVAL_MAX_MS)}**`,
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -575,7 +575,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       if (updatedCount === 0) {
         return interaction.reply({
-          content: `❌ ไม่พบการตั้งค่าสำหรับ **${executorName}** ในระบบ`,
+          content: `❌ No configuration found for **${executorName}**`,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -583,8 +583,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await updateExecutorStatusChannels();
 
-      const intervalNote = newIntervalMs !== null ? ` (Auto-updated ทุก **${formatIntervalMs(newIntervalMs)}**)` : "";
-      return interaction.editReply(`✅ แก้ไขการตั้งค่าสำหรับ **${executorName}** และรีเฟรช Embed / Status เรียบร้อยแล้ว${intervalNote}`);
+      const intervalNote = newIntervalMs !== null ? ` (auto-updates every **${formatIntervalMs(newIntervalMs)}**)` : "";
+      return interaction.editReply(`✅ Settings for **${executorName}** have been updated and embeds/status refreshed${intervalNote}`);
     }
 
     if (sub === "list") {
@@ -603,7 +603,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         .all(interaction.guildId) as any[];
 
       if (alerts.length === 0 && embeds.length === 0 && voice.length === 0 && chat.length === 0) {
-        return interaction.reply({ content: "_ยังไม่มีการตั้งค่าใดๆ_", flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: "_No configurations yet_", flags: MessageFlags.Ephemeral });
       }
 
       const lines = [];
@@ -640,7 +640,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await updateExecutorStatusChannels(); // This also updates chat channels
       await forceRefreshEmbeds();
-      return interaction.editReply("✅ บังคับอัปเดตสถานะ Executor ทุกระบบเรียบร้อยแล้ว");
+      return interaction.editReply("✅ All Executor statuses have been force-updated");
     }
   }
 
@@ -655,7 +655,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       if (!existingChannel && !category) {
         return interaction.reply({
-          content: "❌ กรุณาระบุ **channel** (เลือกห้องเสียงที่มีอยู่แล้ว) หรือ **category** (ให้บอทสร้างห้องใหม่) อย่างใดอย่างหนึ่ง",
+          content: "❌ Please specify either **channel** (an existing voice channel) or **category** (for the bot to create a new channel)",
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -686,8 +686,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await updateBotVoiceChannels();
-        const modeText = mode === "custom" ? `ตั้งชื่อเอง ("${displayName}")` : `เวอร์ชัน Roblox (${robloxChannel})`;
-        return interaction.editReply(`✅ ตั้งค่า Bot Voice Status ที่ห้อง <#${existingChannel.id}> รูปแบบ: **${modeText}** เรียบร้อยแล้ว`);
+        const modeText = mode === "custom" ? `Custom name ("${displayName}")` : `Roblox version (${robloxChannel})`;
+        return interaction.editReply(`✅ Bot Voice Status in <#${existingChannel.id}> with format **${modeText}** has been set up`);
       }
 
       db.prepare(
@@ -706,8 +706,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await updateBotVoiceChannels();
-      const modeText = mode === "custom" ? `ตั้งชื่อเอง ("${displayName}")` : `เวอร์ชัน Roblox (${robloxChannel})`;
-      return interaction.editReply(`✅ ตั้งค่า Bot Voice Status ใน Category \`${category!.id}\` รูปแบบ: **${modeText}** เรียบร้อยแล้ว`);
+      const modeText = mode === "custom" ? `Custom name ("${displayName}")` : `Roblox version (${robloxChannel})`;
+      return interaction.editReply(`✅ Bot Voice Status in category \`${category!.id}\` with format **${modeText}** has been set up`);
     }
 
     if (sub === "remove") {
@@ -731,7 +731,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       const result = db.prepare(`DELETE FROM botVoiceChannels WHERE guildId = ?`).run(interaction.guildId);
       return interaction.reply({
-        content: result.changes ? `✅ ลบห้อง Bot Voice Status ออกเรียบร้อยแล้ว` : `❌ ยังไม่ได้ตั้งค่า Bot Voice Status`,
+        content: result.changes ? `✅ Bot Voice Status channel has been removed` : `❌ Bot Voice Status is not configured`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -741,11 +741,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         .prepare(`SELECT categoryId, voiceChannelId, mode, displayName, robloxChannel FROM botVoiceChannels WHERE guildId = ? AND enabled = 1`)
         .get(interaction.guildId) as { categoryId: string; voiceChannelId: string | null; mode: string; displayName: string; robloxChannel: string } | undefined;
 
-      if (!row) return interaction.reply({ content: "_ยังไม่ได้ตั้งค่า_", flags: MessageFlags.Ephemeral });
+      if (!row) return interaction.reply({ content: "_Not configured_", flags: MessageFlags.Ephemeral });
 
       const modeDesc = row.mode === "custom" ? `Custom Name ("${row.displayName}")` : `Roblox Version (${row.robloxChannel})`;
       return interaction.reply({
-        content: `• **Bot Voice Status** → ${row.voiceChannelId ? `<#${row.voiceChannelId}>` : `Category \`${row.categoryId}\``} (โหมด: **${modeDesc}**)`,
+        content: `• **Bot Voice Status** → ${row.voiceChannelId ? `<#${row.voiceChannelId}>` : `Category \`${row.categoryId}\``} (Mode: **${modeDesc}**)`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -753,7 +753,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (sub === "refresh") {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await updateBotVoiceChannels();
-      return interaction.editReply("✅ รีเฟรชชื่อห้อง Bot Voice Status เรียบร้อยแล้ว");
+      return interaction.editReply("✅ Bot Voice Status channel name has been refreshed");
     }
   }
 
@@ -768,7 +768,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       if (!existingChannel && !category) {
         return interaction.reply({
-          content: "❌ กรุณาระบุ **channel** (เลือกห้องข้อความที่มีอยู่แล้ว) หรือ **category** (ให้บอทสร้างห้องใหม่) อย่างใดอย่างหนึ่ง",
+          content: "❌ Please specify either **channel** (an existing text channel) or **category** (for the bot to create a new channel)",
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -792,8 +792,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await updateBotChatChannels();
-      const modeText = mode === "custom" ? `ตั้งชื่อเอง ("${displayName}")` : `เวอร์ชัน Roblox (${robloxChannel})`;
-      return interaction.editReply(`✅ ตั้งค่า Bot Chat Status ${existingChannel ? `ที่ห้อง <#${existingChannel.id}>` : "(บอทจะสร้างห้องใหม่ใน Category ที่เลือก)"} รูปแบบ: **${modeText}** เรียบร้อยแล้ว`);
+      const modeText = mode === "custom" ? `Custom name ("${displayName}")` : `Roblox version (${robloxChannel})`;
+      return interaction.editReply(`✅ Bot Chat Status ${existingChannel ? `in <#${existingChannel.id}>` : "(the bot will create a new channel in the selected category)"} with format **${modeText}** has been set up`);
     }
 
     if (sub === "remove") {
@@ -812,7 +812,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       const result = db.prepare(`DELETE FROM botChatChannels WHERE guildId = ?`).run(interaction.guildId);
       return interaction.reply({
-        content: result.changes ? `✅ ลบห้อง Bot Chat Status ออกเรียบร้อยแล้ว` : `❌ ยังไม่ได้ตั้งค่า Bot Chat Status`,
+        content: result.changes ? `✅ Bot Chat Status channel has been removed` : `❌ Bot Chat Status is not configured`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -822,11 +822,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         .prepare(`SELECT categoryId, channelId, mode, displayName, robloxChannel FROM botChatChannels WHERE guildId = ? AND enabled = 1`)
         .get(interaction.guildId) as { categoryId: string; channelId: string | null; mode: string; displayName: string; robloxChannel: string } | undefined;
 
-      if (!row) return interaction.reply({ content: "_ยังไม่ได้ตั้งค่า_", flags: MessageFlags.Ephemeral });
+      if (!row) return interaction.reply({ content: "_Not configured_", flags: MessageFlags.Ephemeral });
 
       const modeDesc = row.mode === "custom" ? `Custom Name ("${row.displayName}")` : `Roblox Version (${row.robloxChannel})`;
       return interaction.reply({
-        content: `• **Bot Chat Status** → ${row.channelId ? `<#${row.channelId}>` : `Category \`${row.categoryId}\``} (โหมด: **${modeDesc}**)`,
+        content: `• **Bot Chat Status** → ${row.channelId ? `<#${row.channelId}>` : `Category \`${row.categoryId}\``} (Mode: **${modeDesc}**)`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -834,7 +834,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (sub === "refresh") {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await updateBotChatChannels();
-      return interaction.editReply("✅ รีเฟรชชื่อห้อง Bot Chat Status เรียบร้อยแล้ว");
+      return interaction.editReply("✅ Bot Chat Status channel name has been refreshed");
     }
   }
 }

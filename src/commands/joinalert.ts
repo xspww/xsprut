@@ -9,37 +9,37 @@ import db from "../lib/db";
 
 export const data = new SlashCommandBuilder()
   .setName("joinalert")
-  .setDescription("👋 จัดการแจ้งเตือนสมาชิกใหม่")
+  .setDescription("👋 Manage new member join alerts")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((subcommand) =>
     subcommand
       .setName("add")
-      .setDescription("➕ เปิดการแจ้งเตือนเมื่อมีสมาชิกใหม่เข้าเซิร์ฟเวอร์")
+      .setDescription("➕ Enable alerts when a new member joins the server")
       .addStringOption((option) =>
         option
           .setName("message")
-          .setDescription("ข้อความต้อนรับหลัง mention (เช่น ยินดีต้อนรับ) — ไม่บังคับ")
+          .setDescription("Welcome message after the mention (e.g. Welcome) — optional")
           .setRequired(false),
       ),
   )
   .addSubcommand((subcommand) =>
-    subcommand.setName("remove").setDescription("🗑️ ปิดการแจ้งเตือนสมาชิกใหม่"),
+    subcommand.setName("remove").setDescription("🗑️ Disable new member alerts"),
   )
   .addSubcommand((subcommand) =>
-    subcommand.setName("list").setDescription("📋 ดูการตั้งค่าการแจ้งเตือนสมาชิกใหม่"),
+    subcommand.setName("list").setDescription("📋 View new member alert settings"),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ ต้องมีสิทธิ์ Administrator ถึงจะจัดการการแจ้งเตือนสมาชิกใหม่ได้",
+      content: "❌ You need Administrator permission to manage new member alerts",
       flags: MessageFlags.Ephemeral,
     });
   }
 
   if (!interaction.guildId || !interaction.channelId) {
     return interaction.reply({
-      content: "❌ คำสั่งนี้ใช้ได้เฉพาะใน Server เท่านั้น",
+      content: "❌ This command can only be used in a server",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -49,7 +49,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (subcommand === "add" && !config.ENABLE_GUILD_MEMBERS_INTENT) {
     return interaction.reply({
       content:
-        "❌ ระบบแจ้งเตือนสมาชิกใหม่ถูกปิดอยู่ เพราะยังไม่ได้เปิด Guild Members intent — กรุณาเปิด intent ใน Discord Developer Portal และตั้ง `ENABLE_GUILD_MEMBERS_INTENT=true` ใน .env",
+        "❌ New member alerts are disabled because the Guild Members intent is not enabled — please enable the intent in the Discord Developer Portal and set `ENABLE_GUILD_MEMBERS_INTENT=true` in .env",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -58,7 +58,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const channel = interaction.guild?.channels.cache.get(interaction.channelId);
     if (!channel || !channel.isTextBased()) {
       return interaction.reply({
-        content: "❌ ต้องตั้งค่าการแจ้งเตือนสมาชิกใหม่ในห้องข้อความ (Text Channel)",
+        content: "❌ New member alerts must be set up in a text channel",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -66,7 +66,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const botMember = interaction.guild?.members.me;
     if (!botMember) {
       return interaction.reply({
-        content: "❌ ไม่พบข้อมูลบอทในเซิร์ฟเวอร์นี้",
+        content: "❌ Bot information not found in this server",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -78,7 +78,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     ) {
       return interaction.reply({
         content:
-          "❌ บอทต้องการสิทธิ์ **View Channel** และ **Send Messages** ในห้องนี้เพื่อส่งการแจ้งเตือน",
+          "❌ The bot needs **View Channel** and **Send Messages** permissions in this channel to send alerts",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -95,7 +95,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     ).run(interaction.guildId, interaction.channelId, message);
 
     return interaction.reply({
-      content: `✅ เปิดการแจ้งเตือนสมาชิกใหม่ในห้องนี้แล้ว${message ? `\n📝 ข้อความ: ${message}` : ""}`,
+      content: `✅ New member alerts enabled in this channel${message ? `\n📝 Message: ${message}` : ""}`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -112,8 +112,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     return interaction.reply({
       content: result.changes
-        ? "✅ ปิดการแจ้งเตือนสมาชิกใหม่สำหรับเซิร์ฟเวอร์นี้แล้ว"
-        : "ℹ️ ไม่มีการตั้งค่าการแจ้งเตือนสมาชิกใหม่",
+        ? "✅ New member alerts disabled for this server"
+        : "ℹ️ No new member alert settings found",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -131,14 +131,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (!existing) {
     return interaction.reply({
-      content: "ℹ️ ยังไม่ได้ตั้งค่าการแจ้งเตือนสมาชิกใหม่สำหรับเซิร์ฟเวอร์นี้",
+      content: "ℹ️ New member alerts have not been set up for this server yet",
       flags: MessageFlags.Ephemeral,
     });
   }
 
   return interaction.reply({
-    content: `📋 เปิดการแจ้งเตือนสมาชิกใหม่ที่ <#${existing.channelId}>${
-      existing.customMessage ? `\n📝 ข้อความ: ${existing.customMessage}` : ""
+    content: `📋 New member alerts enabled in <#${existing.channelId}>${
+      existing.customMessage ? `\n📝 Message: ${existing.customMessage}` : ""
     }`,
     flags: MessageFlags.Ephemeral,
   });

@@ -9,12 +9,12 @@ import { getRobloxVersion } from "../lib/robloxVersion";
 
 export const data = new SlashCommandBuilder()
   .setName("ver")
-  .setDescription("🔍 ตรวจสอบเวอร์ชัน Roblox ปัจจุบัน")
+  .setDescription("🔍 Check the current Roblox version")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption((option) =>
     option
       .setName("channel")
-      .setDescription("ช่อง Roblox ที่ต้องการตรวจสอบ (ค่าเริ่มต้น: LIVE)")
+      .setDescription("Roblox channel to check (default: LIVE)")
       .setRequired(false)
       .addChoices(
         ...ROBLOX_CHANNELS.map((channel) => ({
@@ -32,12 +32,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (version) {
     interaction.reply({
-      content: `เวอร์ชันปัจจุบันของ \`${channel}\` คือ \`${version}\``,
+      content: `Current version of \`${channel}\` is \`${version}\``,
       flags: MessageFlags.Ephemeral,
     });
   } else {
     interaction.reply({
-      content: "❌ ไม่สามารถดึงข้อมูลเวอร์ชันได้ในตอนนี้ กรุณาลองใหม่ภายหลัง",
+      content: "❌ Could not fetch version info right now, please try again later",
       flags: MessageFlags.Ephemeral,
     });
   }

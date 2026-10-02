@@ -24,9 +24,9 @@ function formatError(title: string, error: unknown, context?: string): string {
   const err = error instanceof Error ? error : new Error(String(error));
   const lines = [
     `🚨 **${title}**`,
-    `**เวลา:** <t:${Math.floor(Date.now() / 1000)}:f>`,
+    `**Time:** <t:${Math.floor(Date.now() / 1000)}:f>`,
   ];
-  if (context) lines.push(`**บริบท:** ${context}`);
+  if (context) lines.push(`**Context:** ${context}`);
   lines.push(`**Error:** \`${err.name}: ${err.message}\``);
   if (err.stack) {
     const stack = err.stack.split("\n").slice(0, 12).join("\n");

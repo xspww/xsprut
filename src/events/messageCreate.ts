@@ -81,8 +81,8 @@ export async function execute(message: Message) {
           const version = await getRobloxVersion(channel);
           await message.reply(
             version
-              ? `เวอร์ชันปัจจุบันของ \`${channel}\` คือ \`${version}\``
-              : "❌ ไม่สามารถดึงข้อมูลเวอร์ชันได้ในตอนนี้ กรุณาลองใหม่ภายหลัง",
+              ? `Current version of \`${channel}\` is \`${version}\``
+              : "❌ Could not fetch version info right now, please try again later",
           );
         } catch (error) {
           logger.error("[VER] Failed to handle ?ver:", error);
@@ -101,7 +101,7 @@ export async function execute(message: Message) {
           // Creating an invite needs the Create Instant Invite permission.
           const botMember = await message.guild.members.fetchMe();
           if (!botMember.permissions.has(PermissionFlagsBits.CreateInstantInvite)) {
-            await message.reply("❌ บอทไม่มีสิทธิ์ `Create Instant Invite` ในช่องนี้");
+            await message.reply("❌ The bot lacks the `Create Instant Invite` permission in this channel");
             return;
           }
 
@@ -110,7 +110,7 @@ export async function execute(message: Message) {
             maxUses: 1, // Maximum number of uses: 1
           });
           const reply = await message.reply(
-            `🔗 ลิงก์เชิญ: ${invite.url}\n⏱️ หมดอายุใน **30 นาที** | ใช้ได้ **1 ครั้ง**\n_ข้อความนี้จะถูกลบอัตโนมัติ <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`
+            `🔗 Invite link: ${invite.url}\n⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`
           );
           // Auto-delete the reply AND the command message after 30s so the
           // invite link doesn't linger in chat. Deleting another user's
@@ -130,7 +130,7 @@ export async function execute(message: Message) {
           timer.unref?.();
         } catch (error) {
           logger.error("[INV] Failed to handle ?inv:", error);
-          await message.reply("❌ ไม่สามารถสร้างลิงก์เชิญได้ กรุณาลองใหม่ภายหลัง");
+          await message.reply("❌ Could not create an invite link, please try again later");
         }
         return;
       }

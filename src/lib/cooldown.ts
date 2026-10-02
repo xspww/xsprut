@@ -53,8 +53,8 @@ export function checkCooldown(key: string, ms: number): number {
   return 0;
 }
 
-/** Human-readable (Thai) cooldown remaining, rounded up to whole seconds. */
+/** Human-readable (English) cooldown remaining, rounded up to whole seconds. */
 export function formatCooldown(ms: number): string {
   const seconds = Math.max(1, Math.ceil(ms / 1000));
-  return `${seconds} วินาที`;
+  return `${seconds}s`;
 }

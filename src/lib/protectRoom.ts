@@ -34,7 +34,7 @@ export interface ProtectRoomNoticeTarget {
   noticeMessageId: string | null;
 }
 
-/** Per-action metadata: counter label, embed text, Thai display name, required permission. */
+/** Per-action metadata: counter label, embed text, display name, required permission. */
 export const PROTECT_ACTION_META: Record<
   ProtectAction,
   {
@@ -48,7 +48,7 @@ export const PROTECT_ACTION_META: Record<
     countLabel: "Kicks",
     description:
       "This channel is used to catch spam bots. Any messages sent here will result in a **softban**.",
-    displayName: "🔒 Ban (ถาวร)",
+    displayName: "🔒 Ban (Permanent)",
     permission: PermissionFlagsBits.BanMembers,
   },
   timeout: {
