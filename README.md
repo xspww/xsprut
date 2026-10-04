@@ -1,64 +1,101 @@
 <p align="center">
-  <img src="img/White.png" width="120" alt="xsprut Project logo">
+  <img src="img/White.png" width="110" alt="xsprut Project logo">
 </p>
 
 <h1 align="center">xsprut Project</h1>
 
-<p align="center">Roblox and Executor Update Tracker.</p>
+<p align="center">Discord bot that tracks Roblox client updates and executor releases.</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/node-20%2B-green" alt="node">
-  <img src="https://img.shields.io/badge/platform-Windows-blue" alt="platform">
+  <img src="https://img.shields.io/badge/discord.js-14-blue" alt="discord.js">
+  <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="platform">
 </p>
 
-https://github.com/user-attachments/assets/7a14de45-8027-463f-bef6-8e32f8b06c3c
+<p align="center">
+  <a href="https://github.com/user-attachments/assets/7a14de45-8027-463f-bef6-8e32f8b06c3c">
+    <img src="https://github.com/user-attachments/assets/7a14de45-8027-463f-bef6-8e32f8b06c3c" alt="Showcase" width="640">
+  </a>
+</p>
 
 ---
 
-This file shows how to run the bot on your computer. Follow the sections in order. This file covers install, configuration, and start only.
+## Features
 
-## What you need
+- **Update alerts** — posts to a channel when Roblox ships a new client version.
+- **Executor tracking** — monitors executor updates, plus voice and chat activity cards.
+- **Server security** — room protection, user whitelist, and join verification.
+- **Status cards** — live embed with Streaming/Online presence and auto-refresh.
+- **Access control** — command whitelist, per-user cooldowns, error webhook reporting.
+- **Self-hosting friendly** — SQLite storage, optional PM2 process, file logging.
 
-A terminal is an app that runs text commands. Prepare these items before you start:
+## Requirements
 
-1. Install Node.js 20 or newer from https://nodejs.org.
-2. Download this project to your computer.
-3. Open the project folder in a terminal.
-4. Create a Discord account with access to a Discord server.
+- Node.js 20 or newer
+- A Discord bot with a token, application ID, and server ID
+- Windows, macOS, or Linux
 
-Run `node -v` in the project folder to make sure that Node.js works.
+## Setup
 
-## Install and set the `.env` file
+```bash
+git clone https://github.com/xsprut/robloxupdatetracker.git
+cd robloxupdatetracker
+npm install
+```
 
-The `.env` file holds the bot configuration. A bot token is a secret login key. An Application ID is a Discord app number. A Server ID is a Discord server number. Do the steps in order:
+Copy the environment template and fill in your credentials:
 
-1. Run `npm install` in the project folder.
-2. If the computer runs Windows, run `copy .env.example .env` in the project folder.
-3. If the computer runs Mac or Linux, run `cp .env.example .env` in the project folder.
-4. Open the `.env` file in a text editor.
-5. Set `DISCORD_BOT_TOKEN` to your bot token.
-6. Set `DISCORD_CLIENT_ID` to your Application ID.
-7. Set `DISCORD_GUILD_ID` to your Server ID.
-8. Save the `.env` file.
-9. Leave the other lines in the `.env` file unchanged.
-10. Do not share the `.env` file. The file holds a secret key.
+```bash
+# Windows
+copy .env.example .env
 
-## Register the commands
+# macOS / Linux
+cp .env.example .env
+```
 
-A slash command starts with `/` in Discord. If the `.env` file has no Server ID, commands need up to one hour to appear. Do the steps in order:
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DISCORD_BOT_TOKEN` | Yes | Bot login token |
+| `DISCORD_CLIENT_ID` | Yes | Application ID from the Discord Developer Portal |
+| `DISCORD_GUILD_ID` | Yes | Target server ID. Use a comma-separated list for multiple servers |
+| `ALLOWED_USER_IDS` | No | Restrict commands to these user IDs. Empty allows everyone with Administrator |
+| `ERROR_WEBHOOK_URL` | No | Webhook that receives crash notifications |
+| `COMMAND_COOLDOWN_MS` | No | Per-user command cooldown in ms. `0` disables |
 
-1. Run `npm run register-commands` in the project folder.
-2. Wait for the success message in the terminal.
-3. If the command fails, read the error text.
-4. Correct the `.env` file.
-5. Run the command again.
+Full list with defaults is in [`.env.example`](.env.example). Never commit your `.env` file.
 
-## Start the bot
+Register the slash commands, then start the bot:
 
-Do the steps in order:
+```bash
+npm run register-commands
+npm run build
+npm start
+```
 
-1. Run `npm run build` in the project folder.
-2. Run `npm run start` in the project folder.
-3. Wait for the login message in the terminal.
+On Windows, `register-commands.bat` and `start-bot.bat` do the same without typing commands.
 
-The terminal shows `Connecting to Discord` after a successful start. The terminal shows the bot name after a successful login. On Windows, double-click `start-bot.bat` instead of the two commands. Type `/ver` in Discord to test the bot. The bot replies with the Roblox version.
+> Without `DISCORD_GUILD_ID` set, Discord can take up to an hour to publish the commands.
+
+Type `/help` in Discord to see every command. `/help` and `/ver` are the quickest way to verify the setup.
+
+## Commands
+
+| Group | Commands |
+| --- | --- |
+| Roblox updates | `/robloxalert add\|remove\|list`, `/ver` |
+| Executors | `/ex track\|voice\|chat` — `add`, `edit`, `remove`, `list`, `refresh` |
+| Security | `/protectroom setup\|remove\|view`, `/whitelist add\|remove\|list`, `/verify setup\|remove` |
+| Other | `/status`, `/joinalert`, `/cleanup run\|preview`, `/config`, `/test`, `/help` |
+
+All commands require the **Administrator** permission. Run `/help` in Discord for full usage details.
+
+## Scripts
+
+| Command | Action |
+| --- | --- |
+| `npm run dev` | Watch mode for local development |
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm start` | Run the compiled bot |
+| `npm run register-commands` | Register slash commands with Discord |
+| `npm test` | Run the test suite |
+| `npm run pm2:start` | Run under PM2 for always-on hosting |
