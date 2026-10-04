@@ -7,12 +7,28 @@ export const STATUS_ROTATION_MIN_INTERVAL_MS = 5_000;
 
 const DEFAULT_STREAM_URL = "https://www.twitch.tv/roblox";
 
+/** Presence flavours a status message can use. */
+export const STATUS_ACTIVITY_TYPES = ["streaming", "online"] as const;
+export type BotActivityType = (typeof STATUS_ACTIVITY_TYPES)[number];
+
+/** Rows written before the Online option existed stay Streaming. */
+export const DEFAULT_BOT_ACTIVITY_TYPE: BotActivityType = "streaming";
+
+/** Coerce any stored/unknown value to a supported activity type. */
+export function normalizeBotActivityType(value: unknown): BotActivityType {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return (STATUS_ACTIVITY_TYPES as readonly string[]).includes(raw)
+    ? (raw as BotActivityType)
+    : DEFAULT_BOT_ACTIVITY_TYPE;
+}
+
 export interface BotStatusMessage {
   id: number;
   activityText: string;
   streamUrl: string;
   customStatus: string;
   intervalMs: number;
+  activityType: string;
   enabled: boolean;
 }
 
@@ -20,15 +36,27 @@ let rotation: BotStatusMessage[] = [];
 let currentIndex = 0;
 let rotationTimer: ReturnType<typeof setTimeout> | null = null;
 
-function buildActivities(activityText: string, streamUrl: string, customStatus?: string) {
+function buildActivities(
+  activityText: string,
+  streamUrl: string,
+  customStatus?: string,
+  activityType?: string,
+) {
   const custom = customStatus?.trim() ?? "";
+  // "online" is a plain Playing activity; only "streaming" carries a link.
+  const isStreaming = normalizeBotActivityType(activityType) === "streaming";
 
   return [
-    {
-      name: activityText,
-      type: ActivityType.Streaming,
-      url: streamUrl,
-    },
+    isStreaming
+      ? {
+          name: activityText,
+          type: ActivityType.Streaming,
+          url: streamUrl,
+        }
+      : {
+          name: activityText,
+          type: ActivityType.Playing,
+        },
     ...(custom
       ? [
           {
@@ -41,16 +69,23 @@ function buildActivities(activityText: string, streamUrl: string, customStatus?:
   ];
 }
 
-function applyPresence(message: Pick<BotStatusMessage, "activityText" | "streamUrl" | "customStatus">) {
+function applyPresence(
+  message: Pick<BotStatusMessage, "activityText" | "streamUrl" | "customStatus" | "activityType">,
+) {
   client.user?.setPresence({
-    activities: buildActivities(message.activityText, message.streamUrl, message.customStatus),
+    activities: buildActivities(
+      message.activityText,
+      message.streamUrl,
+      message.customStatus,
+      message.activityType,
+    ),
   });
 }
 
 function loadRotation() {
   rotation = db
     .prepare(
-      `SELECT id, activityText, streamUrl, customStatus, intervalMs, enabled
+      `SELECT id, activityText, streamUrl, customStatus, intervalMs, activityType, enabled
        FROM botStatusMessages
        WHERE enabled = 1
        ORDER BY id`,
@@ -98,8 +133,15 @@ export function addBotStatusMessage(
   streamUrl?: string,
   customStatus?: string,
   intervalMs?: number,
+  activityType?: string,
 ) {
-  const url = streamUrl && streamUrl.trim().length > 0 ? streamUrl.trim() : DEFAULT_STREAM_URL;
+  const type = normalizeBotActivityType(activityType);
+  const trimmedUrl = streamUrl?.trim() ?? "";
+  // A link is only meaningful for Streaming — "online" ignores it entirely.
+  let url = "";
+  if (type === "streaming") {
+    url = trimmedUrl.length > 0 ? trimmedUrl : DEFAULT_STREAM_URL;
+  }
   const custom = customStatus?.trim() ?? "";
   const interval =
     typeof intervalMs === "number" && Number.isFinite(intervalMs) && intervalMs > 0
@@ -108,10 +150,10 @@ export function addBotStatusMessage(
 
   const info = db
     .prepare(
-      `INSERT INTO botStatusMessages (activityText, streamUrl, customStatus, intervalMs, enabled)
-       VALUES (?, ?, ?, ?, 1)`,
+      `INSERT INTO botStatusMessages (activityText, streamUrl, customStatus, intervalMs, activityType, enabled)
+       VALUES (?, ?, ?, ?, ?, 1)`,
     )
-    .run(activityText, url, custom, interval);
+    .run(activityText, url, custom, interval, type);
 
   loadRotation();
 

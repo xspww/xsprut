@@ -9,12 +9,19 @@ import {
   STATUS_ROTATION_DEFAULT_INTERVAL_MS,
   STATUS_ROTATION_MIN_INTERVAL_MS,
   addBotStatusMessage,
+  normalizeBotActivityType,
   refreshBotStatus,
   resetBotStatus,
 } from "../lib/presenceManager";
 import { formatIntervalMs, parseIntervalToMs } from "../lib/constants";
 
 const NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+
+/** Human labels for /status list and the add confirmation. */
+const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  streaming: "📺 Streaming",
+  online: "🟢 Online",
+};
 
 export const data = new SlashCommandBuilder()
   .setName("status")
@@ -26,6 +33,16 @@ export const data = new SlashCommandBuilder()
       .setDescription("➕ Add a bot status message (add multiple messages to rotate automatically)")
       .addStringOption((option) =>
         option
+          .setName("type")
+          .setDescription("📡 Presence type: 📺 Streaming (shows a link) or 🟢 Online (plain text)")
+          .setRequired(true)
+          .addChoices(
+            { name: "📺 Streaming", value: "streaming" },
+            { name: "🟢 Online", value: "online" },
+          ),
+      )
+      .addStringOption((option) =>
+        option
           .setName("text")
           .setDescription("The status text to display")
           .setRequired(true),
@@ -33,7 +50,7 @@ export const data = new SlashCommandBuilder()
       .addStringOption((option) =>
         option
           .setName("url")
-          .setDescription("Stream URL link (optional)")
+          .setDescription("Stream URL link (only used when type = Streaming)")
           .setRequired(false),
       )
       .addStringOption((option) =>
@@ -76,6 +93,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "add") {
+    const activityType = normalizeBotActivityType(interaction.options.getString("type", true));
     const text = interaction.options.getString("text", true).trim();
     if (text === "") {
       return interaction.reply({
@@ -105,7 +123,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       intervalMs = parsed;
     }
 
-    addBotStatusMessage(text, url, custom, intervalMs);
+    addBotStatusMessage(text, url, custom, intervalMs, activityType);
 
     const count = db
       .prepare(`SELECT COUNT(*) AS c FROM botStatusMessages WHERE enabled = 1`)
@@ -116,9 +134,18 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         ? `\n📋 There are now **${count.c}** status messages in total — they will rotate automatically on schedule`
         : `\n📋 There is now 1 status message — use /status add to add more so they rotate automatically`;
 
+    // Warn instead of silently dropping a link the user bothered to type.
+    const urlNote =
+      activityType === "online" && url
+        ? `\n⚠️ **url** was ignored because type is **Online** — links only show on Streaming`
+        : "";
+
     return interaction.reply({
       content:
-        `✅ Status message added: \`${text}\`${custom ? `\n💬 Custom Status: \`${custom}\`` : ""}` +
+        `✅ Status message added: \`${text}\`` +
+        `\n${ACTIVITY_TYPE_LABELS[activityType] ?? activityType}` +
+        (custom ? `\n💬 Custom Status: \`${custom}\`` : "") +
+        urlNote +
         `\n⏱️ This message will be shown for **${formatIntervalMs(intervalMs)}** then rotate to the next one${rotationNote}`,
       flags: MessageFlags.Ephemeral,
     });
@@ -145,12 +172,18 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   // list (formerly view)
   const messages = db
     .prepare(
-      `SELECT activityText, streamUrl, customStatus, intervalMs
+      `SELECT activityText, streamUrl, customStatus, intervalMs, activityType
        FROM botStatusMessages
        WHERE enabled = 1
        ORDER BY id`,
     )
-    .all() as { activityText: string; streamUrl: string; customStatus: string; intervalMs: number }[];
+    .all() as {
+    activityText: string;
+    streamUrl: string;
+    customStatus: string;
+    intervalMs: number;
+    activityType: string;
+  }[];
 
   if (messages.length === 0) {
     return interaction.reply({
@@ -162,11 +195,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const lines = messages.map((m, i) => {
     const num = i < NUMBER_EMOJIS.length ? `${NUMBER_EMOJIS[i]} ` : `${i + 1}. `;
     const interval = formatIntervalMs(m.intervalMs || STATUS_ROTATION_DEFAULT_INTERVAL_MS);
+    const type = normalizeBotActivityType(m.activityType);
+    // Only a Streaming row has a link worth showing.
+    const link = type === "streaming" && m.streamUrl ? `\n   🔗 ${m.streamUrl}` : "";
+
     return (
-      `${num}\`${m.activityText}\` (rotates every **${interval}**)${
+      `${num}\`${m.activityText}\` — ${ACTIVITY_TYPE_LABELS[type] ?? type} (rotates every **${interval}**)${
         m.customStatus ? `\n   💬 Custom: \`${m.customStatus}\`` : ""
-      }` +
-      `\n   🔗 ${m.streamUrl}`
+      }` + link
     );
   });
 

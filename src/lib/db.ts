@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS botStatusMessages (
     streamUrl TEXT NOT NULL,
     customStatus TEXT NOT NULL DEFAULT '',
     intervalMs INTEGER NOT NULL DEFAULT 60000,
+    activityType TEXT NOT NULL DEFAULT 'streaming',
     enabled BOOLEAN NOT NULL DEFAULT 1
 );
 
@@ -281,6 +282,26 @@ try {
   }
 } catch (e) {
   logger.error("Failed to migrate legacy botStatus into botStatusMessages:", e);
+}
+
+// Migration for botStatusMessages: add activityType if missing. Defaults to
+// 'streaming' so every pre-existing row keeps the exact presence it had before
+// the Online option existed.
+const botStatusActivityTypeExists = db
+  .prepare(
+    `SELECT 1 FROM pragma_table_info('botStatusMessages') WHERE name = 'activityType'`,
+  )
+  .get();
+
+if (!botStatusActivityTypeExists) {
+  try {
+    db.exec(
+      `ALTER TABLE botStatusMessages ADD COLUMN activityType TEXT NOT NULL DEFAULT 'streaming'`,
+    );
+    logger.info("Added activityType column to botStatusMessages");
+  } catch (e) {
+    logger.error("Failed to add activityType column to botStatusMessages", e);
+  }
 }
 
 // Migration for executorChatStatusChannels: add categoryId if missing / update table schema
