@@ -12,11 +12,7 @@
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="platform">
 </p>
 
-<p align="center">
-  <a href="https://github.com/user-attachments/assets/7a14de45-8027-463f-bef6-8e32f8b06c3c">
-    <img src="https://github.com/user-attachments/assets/7a14de45-8027-463f-bef6-8e32f8b06c3c" alt="Showcase" width="640">
-  </a>
-</p>
+https://github.com/user-attachments/assets/7a14de45-8027-463f-bef6-8e32f8b06c3c
 
 ---
 
