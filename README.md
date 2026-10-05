@@ -85,6 +85,19 @@ Type `/help` in Discord to see every command. `/help` and `/ver` are the quickes
 
 All commands require the **Administrator** permission. Run `/help` in Discord for full usage details.
 
+### Prefix commands (no slash needed)
+
+Anyone can use these in normal text channels by typing them directly.
+They never work in a protected room.
+
+| Command | Action |
+| --- | --- |
+| `?ver` / `?ver ZBeta` | Show the current Roblox version (cached 30s, WEAO fallback for LIVE) |
+| `?inv` | Create a 1-use invite link for the channel (expires in 30 min, auto-deleted after 30s) |
+
+`?inv` needs the bot to have the `Create Instant Invite` permission.
+Both commands share the same per-user cooldown as slash commands.
+
 ## Scripts
 
 | Command | Action |
