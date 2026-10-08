@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS protectedRooms (
 
 CREATE TABLE IF NOT EXISTS messageLog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guildId TEXT,
     channelId TEXT NOT NULL,
     userId TEXT NOT NULL,
     messageId TEXT NOT NULL,
@@ -455,6 +456,30 @@ if (!embedIntervalExists) {
     logger.error("Failed to migrate executorEmbedStatusChannels (intervalMs):", e);
   }
 }
+
+// Migration for messageLog: scope rows to a guild so a punishment in one
+// server can never delete the same user's messages in another server.
+// Pre-migration rows have NULL guildId and are ignored by the new
+// guild-scoped queries until the 2-minute prune removes them.
+const messageLogGuildIdExists = db
+  .prepare(`SELECT 1 FROM pragma_table_info('messageLog') WHERE name = 'guildId'`)
+  .get();
+
+if (!messageLogGuildIdExists) {
+  try {
+    db.exec(`ALTER TABLE messageLog ADD COLUMN guildId TEXT;`);
+    logger.info("Added guildId column to messageLog");
+  } catch (e) {
+    logger.error("Failed to migrate messageLog (guildId):", e);
+  }
+}
+
+// Guild-scoped lookup for the protect-room cleanup — created here (after the
+// migration above) so it never runs before the column exists on old DBs.
+db.exec(`
+CREATE INDEX IF NOT EXISTS idx_messageLog_guild_user_timestamp
+ON messageLog (guildId, userId, timestamp);
+`);
 
 // Music system removed — drop the leftover musicPanels table if present.
 try {

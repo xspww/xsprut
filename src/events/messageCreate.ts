@@ -22,8 +22,23 @@ let cleanupStarted = false;
 // (db.prepare is also memoized globally in src/lib/db.ts.)
 const stmtDeleteOldMessages = db.prepare("DELETE FROM messageLog WHERE timestamp < ?");
 const stmtInsertMessageLog = db.prepare(
-  "INSERT INTO messageLog (channelId, userId, messageId, timestamp) VALUES (?, ?, ?, ?)"
+  "INSERT INTO messageLog (guildId, channelId, userId, messageId, timestamp) VALUES (?, ?, ?, ?, ?)"
 );
+
+// Post-punish purge: userIds whose messages are deleted on sight for 60s
+// after a punishment. Covers the race where the offender keeps typing while
+// the ban/timeout API calls are still in flight (after the pre-punish SELECT
+// below has already run), plus anything they send right after. In-memory is
+// enough — the window is only 1 minute, so losing it on restart is harmless.
+const postPurgeUntil = new Map<string, number>();
+const POST_PURGE_MS = 60_000;
+
+// In-flight punish guard: `${guildId}:${userId}` -> guard expiry. Two messages
+// from the same offender arriving at once must not double-punish (double
+// timeout / double counter). Self-expiring after 30s so no finally-block is
+// needed — a banned user is gone and a timed-out user cannot speak anyway.
+const punishGuardUntil = new Map<string, number>();
+const PUNISH_GUARD_MS = 30_000;
 
 export async function execute(message: Message) {
   try {
@@ -35,7 +50,7 @@ export async function execute(message: Message) {
 
     if (!cleanupStarted) {
       cleanupStarted = true;
-      setInterval(() => {
+      const sweepTimer = setInterval(() => {
         try {
           // Delete rows older than 2 minutes (120,000 ms)
           const threshold = Date.now() - 120_000;
@@ -43,15 +58,48 @@ export async function execute(message: Message) {
         } catch (e) {
           logger.error("Failed to clean up messageLog:", e);
         }
+        // Drop expired post-punish purge + punish-guard entries so the maps can't grow.
+        try {
+          const now = Date.now();
+          for (const [key, until] of postPurgeUntil) {
+            if (until <= now) postPurgeUntil.delete(key);
+          }
+          for (const [key, until] of punishGuardUntil) {
+            if (until <= now) punishGuardUntil.delete(key);
+          }
+        } catch {
+          // ignore
+        }
       }, 5 * 60 * 1000); // run every 5 minutes
+      sweepTimer.unref?.();
     }
 
     // Only process guild messages
     if (!message.guild || !message.channel.isTextBased()) return;
 
+    // Guild-scoped keys — a punishment in one server must never touch another.
+    const scopeKey = `${message.guildId}:${message.author.id}`;
+
+    // Post-punish purge window: this user was just punished — delete their
+    // messages on sight in ANY channel of this guild. Best-effort (needs
+    // Manage Messages). Falls through to the normal flow below so protection
+    // re-triggers if the original punish failed.
+    const purgeUntil = postPurgeUntil.get(scopeKey);
+    if (purgeUntil !== undefined) {
+      if (Date.now() < purgeUntil) {
+        try {
+          await message.delete();
+        } catch {
+          // Already gone or no permission — the normal flow handles the rest.
+        }
+      } else {
+        postPurgeUntil.delete(scopeKey);
+      }
+    }
+
     // Log EVERY message from every user (for tracking)
     try {
-      stmtInsertMessageLog.run(message.channelId, message.author.id, message.id, Date.now());
+      stmtInsertMessageLog.run(message.guildId, message.channelId, message.author.id, message.id, Date.now());
     } catch (e) {
       // Message might already be logged, ignore
     }
@@ -74,8 +122,16 @@ export async function execute(message: Message) {
           return;
         }
         try {
-          const wanted = verMatch[1]?.trim() ?? "LIVE";
-          const channel = ROBLOX_CHANNELS.includes(wanted as any) ? wanted : "LIVE";
+          const wantedRaw = verMatch[1]?.trim() ?? "LIVE";
+          const channel = (ROBLOX_CHANNELS as readonly string[]).find(
+            (c) => c.toLowerCase() === wantedRaw.toLowerCase(),
+          );
+          if (!channel) {
+            await message.reply(
+              `❌ Unknown channel \`${wantedRaw}\`. Available: ${ROBLOX_CHANNELS.map((c) => `\`${c}\``).join(", ")}`,
+            );
+            return;
+          }
           // Cached (30s) + WEAO fallback for LIVE — ?ver previously hit the
           // Roblox API on every call with no fallback.
           const version = await getRobloxVersion(channel);
@@ -98,9 +154,12 @@ export async function execute(message: Message) {
           return;
         }
         try {
-          // Creating an invite needs the Create Instant Invite permission.
+          // Creating an invite needs Create Instant Invite IN THIS CHANNEL —
+          // check the channel overwrite-resolved permissions, not the
+          // guild-wide ones (they can differ per channel).
           const botMember = await message.guild.members.fetchMe();
-          if (!botMember.permissions.has(PermissionFlagsBits.CreateInstantInvite)) {
+          const channelPerms = (message.channel as any).permissionsFor?.(botMember);
+          if (!channelPerms?.has(PermissionFlagsBits.CreateInstantInvite)) {
             await message.reply("❌ The bot lacks the `Create Instant Invite` permission in this channel");
             return;
           }
@@ -140,9 +199,23 @@ export async function execute(message: Message) {
 
     // Channel is protected, ban the user and delete their recent messages
     try {
-      // Get the guild member
-      const member = message.member;
-      if (!member) return;
+      // Get the guild member. message.member can be null when the member
+      // isn't cached (e.g. GuildMembers intent off) — fetch before giving up
+      // so the offender can't slip through silently.
+      let member = message.member;
+      if (!member) {
+        try {
+          member = await message.guild.members.fetch(message.author.id);
+        } catch {
+          member = null;
+        }
+      }
+      if (!member) {
+        logger.warn(
+          `[PROTECT] Could not resolve member ${message.author.tag} in guild ${message.guildId} — skipping punish`
+        );
+        return;
+      }
 
       // Skip protection for Guild Owner or Administrator
       if (
@@ -154,6 +227,20 @@ export async function execute(message: Message) {
         );
         return;
       }
+
+      // A second message from the same offender arriving while the first
+      // punish is still in flight must not double-punish / double-count.
+      // Check-AND-set here is atomic (no await between them), so two
+      // concurrent handlers can't both slip through. Cleared on every
+      // failure return below so a failed punish doesn't suppress retries.
+      const guardUntil = punishGuardUntil.get(scopeKey);
+      if (guardUntil !== undefined && Date.now() < guardUntil) {
+        logger.info(
+          `[PROTECT] Punish already in flight for ${message.author.tag} in guild ${message.guildId} — skipping duplicate`
+        );
+        return;
+      }
+      punishGuardUntil.set(scopeKey, Date.now() + PUNISH_GUARD_MS);
 
       // Get protected room settings (from the DB cache — row was fetched
       // above for the isProtected check, so no extra query).
@@ -168,6 +255,7 @@ export async function execute(message: Message) {
       const botMember = await message.guild.members.fetchMe();
       const neededPerm = PROTECT_ACTION_META[protectedRoom.actionType].permission;
       if (!botMember.permissions.has(neededPerm)) {
+        punishGuardUntil.delete(scopeKey);
         logger.warn(
           `[PROTECT] Bot lacks ${neededPerm} permission in guild ${message.guildId}`
         );
@@ -180,7 +268,7 @@ export async function execute(message: Message) {
       try {
         if (protectedRoom.actionType === "timeout") {
           // Apply timeout
-          await message.member?.timeout(
+          await member.timeout(
             protectedRoom.timeoutDuration,
             `[PROTECTED ROOM] Sent message in protected channel`
           );
@@ -206,42 +294,52 @@ export async function execute(message: Message) {
           // and the next message see the new count.
           invalidateProtectedRoom(message.guildId!, message.channelId);
 
+          // Re-read instead of using the pre-punish cached value — a
+          // concurrent punish may have incremented it in between.
+          const fresh = db
+            .prepare("SELECT actionCount FROM protectedRooms WHERE guildId = ? AND channelId = ?")
+            .get(message.guildId, message.channelId) as { actionCount: number } | undefined;
+          const count = fresh?.actionCount ?? protectedRoom.actionCount + 1;
+
           const target: ProtectRoomNoticeTarget = {
             guildId: message.guildId!,
             channelId: message.channelId,
             actionType: protectedRoom.actionType,
             noticeMessageId: protectedRoom.noticeMessageId,
           };
-          await refreshProtectRoomNotice(message.channel, target, protectedRoom.actionCount + 1);
+          await refreshProtectRoomNotice(message.channel, target, count);
         } catch (err) {
           logger.error(`[PROTECT] Failed to update notice counter in guild ${message.guildId}:`, err);
         }
       } catch (error) {
+        punishGuardUntil.delete(scopeKey);
         logger.error(`[PROTECT] Error applying ${protectedRoom.actionType} to ${message.author.tag}:`, error);
         // If the punish action failed, skip cleanup so we don't waste time.
         return;
       }
 
+      // Watch this user for 60s so messages that slipped through the
+      // pre-punish SELECT (typed while the ban/timeout calls were in flight)
+      // are deleted on sight by the check at the top of this handler.
+      // Guild-scoped: never touches other servers. (The in-flight guard above
+      // stays armed until it expires so duplicates can't double-count.)
+      postPurgeUntil.set(scopeKey, Date.now() + POST_PURGE_MS);
+
       // Now clean up messages. Use the local messageLog (which has been tracking
       // every message the user sends) to find messages they sent in the last
-      // 1 minute across ALL channels — then delete from each channel where
-      // they exist, within Discord's bulk-delete window (<= 14 days old).
+      // 1 minute across ALL channels OF THIS GUILD — then delete from each
+      // channel where they exist, within Discord's bulk-delete window
+      // (<= 14 days old).
       const oneMinuteMs = 60 * 1000;
       const oneMinuteAgo = Date.now() - oneMinuteMs;
 
-      // Need ManageMessages to delete messages (same member as the action
-      // permission check above — reuse it instead of fetching again).
-      if (!botMember.permissions.has(PermissionFlagsBits.ManageMessages)) {
-        logger.warn(
-          `[PROTECT] Bot lacks ManageMessages permission in guild ${message.guildId} — cannot delete messages`
-        );
-      } else {
-        // Pull messages from this user within the last 1 minute, across all channels
+      {
+        // Pull this guild's messages from this user within the last 1 minute.
         const userMessages = db
           .prepare(
-            "SELECT messageId, channelId FROM messageLog WHERE userId = ? AND timestamp >= ?"
+            "SELECT messageId, channelId FROM messageLog WHERE guildId = ? AND userId = ? AND timestamp >= ?"
           )
-          .all(message.author.id, oneMinuteAgo) as { messageId: string; channelId: string }[];
+          .all(message.guildId, message.author.id, oneMinuteAgo) as { messageId: string; channelId: string }[];
 
         logger.info(
           `[PROTECT] Found ${userMessages.length} messages from ${message.author.tag} in last 1 minute across all channels`
@@ -257,11 +355,35 @@ export async function execute(message: Message) {
         let deletedCount = 0;
         for (const [channelId, ids] of byChannel) {
           try {
-            const channel: any = await message.guild.channels.fetch(channelId);
+            // Prefer the cache — channels.fetch hits the API every time.
+            const channel: any =
+              message.guild.channels.cache.get(channelId) ??
+              (await message.guild.channels.fetch(channelId).catch(() => null));
             if (!channel || !channel.isTextBased?.()) {
               logger.warn(
                 `[PROTECT] Channel ${channelId} not text-based or not found, skipping`
               );
+              continue;
+            }
+            // ManageMessages is channel-level (overwrites can differ per
+            // channel), so check it here instead of once guild-wide.
+            if (!channel.permissionsFor?.(botMember)?.has(PermissionFlagsBits.ManageMessages)) {
+              logger.warn(
+                `[PROTECT] Bot lacks ManageMessages in channel ${channelId} — skipping`
+              );
+              continue;
+            }
+            // bulkDelete needs 2-100 messages — a single id always throws,
+            // so delete it directly instead of wasting an API call.
+            if (ids.length === 1) {
+              try {
+                await channel.messages.delete(ids[0]);
+                deletedCount++;
+              } catch (delErr: any) {
+                if (delErr?.code !== 10008) {
+                  logger.warn(`[PROTECT] delete ${ids[0]} failed:`, delErr);
+                }
+              }
               continue;
             }
             // Prefer bulkDelete; fall back to per-message delete
@@ -316,8 +438,8 @@ export async function execute(message: Message) {
         );
       }
 
-      // Clean up the DB logs for this user
-      db.prepare("DELETE FROM messageLog WHERE userId = ?").run(message.author.id);
+      // Clean up this guild's DB logs for this user
+      db.prepare("DELETE FROM messageLog WHERE guildId = ? AND userId = ?").run(message.guildId, message.author.id);
     } catch (error) {
       logger.error(
         `[PROTECT] Error handling protected room violation for ${message.author.tag}:`,
@@ -325,6 +447,6 @@ export async function execute(message: Message) {
       );
     }
   } catch (e) {
-    // ignore
+    logger.error("[messageCreate] Unhandled error in message handler:", e);
   }
 }

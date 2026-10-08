@@ -99,7 +99,7 @@ export async function setProtectRoom(
       `**Punishment:** ${PROTECT_ACTION_META[action].displayName}${action === "timeout" ? ` (${timeoutMinutes} minutes)` : ""}\n\n` +
       `**Rules:**\n` +
       `• Anyone who sends any message will be punished immediately\n` +
-      `• All messages from that user in the last 1 minute will be deleted\n` +
+      `• All messages from that user within 1 minute before and after will be deleted\n` +
       `• No exceptions, except for the Guild Owner or Administrators\n\n` +
       (noticeMessageId
         ? `📌 A warning sign has been posted in this channel — the punished user count will update on the sign automatically`

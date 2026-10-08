@@ -47,7 +47,7 @@ export function createRobloxUpdateContainer(
   const galleryItem = new MediaGalleryItemBuilder().setURL(`attachment://${banner.name}`);
   const gallery = new MediaGalleryBuilder().addItems(galleryItem);
 
-  let headerContent = `### Live update detected!\n\nA new ROBLOX ${robloxChannel} version is out. Real will be updated shortly.`;
+  let headerContent = `### A Roblox update has been detected!\n\nThis is a live update, Roblox exploits are patched.`;
 
   if (type === "pre") {
     headerContent = `### A future Roblox update has been detected!\n\nThis is a future update, no need to worry about Roblox exploits being patched yet.`;
@@ -69,7 +69,7 @@ export function createRobloxUpdateContainer(
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(downloadBtn);
 
   const footerText = new TextDisplayBuilder().setContent(
-    `Powered by Diff Team | Channel : ${robloxChannel}`,
+    `Powered by WEAO | Channel : ${robloxChannel}`,
   );
 
   const container = new ContainerBuilder()
