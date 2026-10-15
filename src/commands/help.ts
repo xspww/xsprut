@@ -48,6 +48,7 @@ const HELP_GROUPS: HelpGroup[] = [
     name: "Security",
     entries: [
       "/protectroom setup",
+      "/protectroom edit",
       "/protectroom remove",
       "/protectroom view",
       "/whitelist add",

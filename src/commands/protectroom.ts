@@ -11,8 +11,16 @@ import { invalidateProtectedRoom } from "../lib/dbCache";
 import {
   PROTECT_ACTION_META,
   sendProtectRoomNotice,
+  buildProtectRoomNoticeComponents,
   type ProtectAction,
 } from "../lib/protectRoom";
+import {
+  deleteLocalPanelImage,
+  isLocalPanelImageMissing,
+  panelImageFilesForPost,
+  persistPanelImageFromUrl,
+  resolvePanelImageInput,
+} from "../lib/panelImage";
 
 export const data = new SlashCommandBuilder()
   .setName("protectroom")
@@ -40,6 +48,35 @@ export const data = new SlashCommandBuilder()
           .setRequired(false)
           .setMinValue(1)
           .setMaxValue(40320)
+      )
+      .addAttachmentOption((option) =>
+        option
+          .setName("image")
+          .setDescription("🖼️ Banner image uploaded with the command (shown on top of the notice)")
+          .setRequired(false)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("image_url")
+          .setDescription("🔗 Direct https link to a banner image (upload above wins)")
+          .setRequired(false)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("edit")
+      .setDescription("✏️ Change the banner image without resetting the counter")
+      .addAttachmentOption((option) =>
+        option
+          .setName("image")
+          .setDescription("🖼️ New banner image (upload wins over image_url)")
+          .setRequired(false)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("image_url")
+          .setDescription("🔗 Direct https link, or 'clear' to remove the banner")
+          .setRequired(false)
       )
   )
   .addSubcommand((sub) =>
@@ -78,14 +115,41 @@ export async function setProtectRoom(
     });
   }
 
-  db.prepare("INSERT INTO protectedRooms (guildId, channelId, actionType, timeoutDuration, createdAt) VALUES (?, ?, ?, ?, ?)")
-    .run(interaction.guildId, interaction.channelId, action, timeoutDuration, Date.now());
+  // ─── Optional banner image (upload wins over URL) ──────────────────────
+  const attachment = interaction.options.getAttachment("image");
+  const imageUrlOption = interaction.options.getString("image_url");
+  const resolved = resolvePanelImageInput(
+    attachment
+      ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType, size: attachment.size }
+      : null,
+    imageUrlOption,
+  );
+  if (resolved.error) {
+    return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+  }
+  let storedImage: string | null = null;
+  if (resolved.image?.kind === "attachment") {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      storedImage = await persistPanelImageFromUrl(resolved.image.url, resolved.image.filename, {
+        contentType: attachment?.contentType,
+        scope: "protect",
+      });
+    } catch (e: any) {
+      return interaction.editReply(e?.message ?? "❌ Could not save the image");
+    }
+  } else if (resolved.image?.kind === "url") {
+    storedImage = resolved.image.url;
+  }
+
+  db.prepare("INSERT INTO protectedRooms (guildId, channelId, actionType, timeoutDuration, imageUrl, createdAt) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(interaction.guildId, interaction.channelId, action, timeoutDuration, storedImage, Date.now());
   invalidateProtectedRoom(interaction.guildId, interaction.channelId);
 
-  // Post the notice message (embed + counter button) in the protected channel.
+  // Post the notice message (banner + counter button) in the protected channel.
   let noticeMessageId: string | null = null;
   if (interaction.channel?.isTextBased()) {
-    noticeMessageId = await sendProtectRoomNotice(interaction.channel, action);
+    noticeMessageId = await sendProtectRoomNotice(interaction.channel, action, storedImage);
   }
 
   db.prepare("UPDATE protectedRooms SET noticeMessageId = ? WHERE guildId = ? AND channelId = ?")
@@ -108,6 +172,10 @@ export async function setProtectRoom(
     .setTimestamp();
 
   logger.info(`[PROTECT] Channel ${interaction.channelId} in guild ${interaction.guildId} set as protected (${action}) by ${interaction.user.tag}`);
+  // deferred earlier only when an upload needed downloading
+  if (interaction.deferred) {
+    return interaction.editReply({ embeds: [embed] });
+  }
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
@@ -120,9 +188,9 @@ export async function removeProtectRoom(interaction: ChatInputCommandInteraction
   }
 
   const existing = db
-    .prepare("SELECT * FROM protectedRooms WHERE guildId = ? AND channelId = ?")
+    .prepare("SELECT noticeMessageId, imageUrl FROM protectedRooms WHERE guildId = ? AND channelId = ?")
     .get(interaction.guildId, interaction.channelId) as
-    | { noticeMessageId: string | null }
+    | { noticeMessageId: string | null; imageUrl: string | null }
     | undefined;
 
   if (!existing) {
@@ -140,6 +208,7 @@ export async function removeProtectRoom(interaction: ChatInputCommandInteraction
   db.prepare("DELETE FROM protectedRooms WHERE guildId = ? AND channelId = ?")
     .run(interaction.guildId, interaction.channelId);
   invalidateProtectedRoom(interaction.guildId, interaction.channelId);
+  deleteLocalPanelImage(existing.imageUrl);
 
   logger.info(`[PROTECT] Channel ${interaction.channelId} in guild ${interaction.guildId} unprotected by ${interaction.user.tag}`);
   return interaction.reply({
@@ -157,8 +226,8 @@ export async function statusProtectRoom(interaction: ChatInputCommandInteraction
   }
 
   const existing = db
-    .prepare("SELECT actionType, timeoutDuration, actionCount FROM protectedRooms WHERE guildId = ? AND channelId = ?")
-    .get(interaction.guildId, interaction.channelId) as { actionType: ProtectAction; timeoutDuration: number; actionCount: number } | undefined;
+    .prepare("SELECT actionType, timeoutDuration, actionCount, imageUrl FROM protectedRooms WHERE guildId = ? AND channelId = ?")
+    .get(interaction.guildId, interaction.channelId) as { actionType: ProtectAction; timeoutDuration: number; actionCount: number; imageUrl: string | null } | undefined;
 
   if (!existing) {
     return interaction.reply({
@@ -173,12 +242,15 @@ export async function statusProtectRoom(interaction: ChatInputCommandInteraction
     .setDescription(
       `Channel <#${interaction.channelId}> has the protected room system enabled\n\n` +
       `**Punishment:** ${PROTECT_ACTION_META[existing.actionType].displayName}${existing.actionType === "timeout" ? ` (${existing.timeoutDuration / (60 * 1000)} minutes)` : ""}\n` +
-      `**Users punished so far:** ${existing.actionCount}`
+      `**Users punished so far:** ${existing.actionCount}\n` +
+      `**Banner:** ${existing.imageUrl ? "set 🖼️" : "none"}`
     )
     .setTimestamp();
 
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
+
+import { editProtectRoom } from "./protectroomEdit";
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   const sub = interaction.options.getSubcommand(true);
@@ -191,6 +263,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (sub === "remove") {
     return removeProtectRoom(interaction);
+  }
+
+  if (sub === "edit") {
+    return editProtectRoom(interaction);
   }
 
   if (sub === "view") {

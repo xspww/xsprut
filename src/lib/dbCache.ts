@@ -15,6 +15,8 @@ import { TTLCache } from "./cache";
 
 // ─── protectedRooms ────────────────────────────────────────────────────────
 // Hot path: checked on EVERY message (src/events/messageCreate.ts).
+// NOTE: imageUrl is deliberately NOT cached — the hot path never needs the
+// banner (only punish flow does, and it reads the column directly).
 export type ProtectedRoomRow = {
   actionType: string;
   timeoutDuration: number;

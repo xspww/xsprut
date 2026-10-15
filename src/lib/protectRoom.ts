@@ -3,14 +3,22 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   MessageFlags,
   PermissionFlagsBits,
+  SeparatorBuilder,
   TextDisplayBuilder,
   type TextBasedChannel,
 } from "discord.js";
 import db from "./db";
 import logger from "./logger";
 import { invalidateProtectedRoom } from "./dbCache";
+import {
+  isLocalPanelImageMissing,
+  panelImageDisplayUrl,
+  panelImageFilesForPost,
+} from "./panelImage";
 
 /**
  * Helpers for the protected-room "notice" message.
@@ -32,6 +40,7 @@ export interface ProtectRoomNoticeTarget {
   channelId: string;
   actionType: ProtectAction;
   noticeMessageId: string | null;
+  imageUrl?: string | null;
 }
 
 /** Per-action metadata: counter label, embed text, display name, required permission. */
@@ -60,27 +69,43 @@ export const PROTECT_ACTION_META: Record<
   },
 };
 
-/** Build the Components v2 container: header/body text + logo thumbnail + counter pill. */
+/** Build the Components v2 container: banner + header/body text + counter pill. */
 export function buildProtectRoomNoticeComponents(
   actionType: ProtectAction,
   count: number,
+  imageUrl?: string | null,
 ) {
   const meta = PROTECT_ACTION_META[actionType];
 
-  const container = new ContainerBuilder()
-    .addTextDisplayComponents(
+  const container = new ContainerBuilder();
+  const bannerUrl = panelImageDisplayUrl(imageUrl);
+  if (bannerUrl) {
+    container
+      .addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder().setURL(bannerUrl).setDescription("Protected room banner"),
+        ),
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("# DO NOT SEND MESSAGES IN THIS CHANNEL"),
+        new TextDisplayBuilder().setContent(meta.description),
+      );
+  } else {
+    container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent("# DO NOT SEND MESSAGES IN THIS CHANNEL"),
       new TextDisplayBuilder().setContent(meta.description),
-    )
-    .addActionRowComponents(
-      new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
-          .setCustomId("protect_room_counter")
-          .setLabel(`${meta.countLabel}: ${count}`)
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(true),
-      ),
     );
+  }
+  container.addActionRowComponents(
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("protect_room_counter")
+        .setLabel(`${meta.countLabel}: ${count}`)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true),
+    ),
+  );
 
   return [container];
 }
@@ -89,11 +114,13 @@ export function buildProtectRoomNoticeComponents(
 export async function sendProtectRoomNotice(
   channel: TextBasedChannel,
   actionType: ProtectAction,
+  imageUrl?: string | null,
 ): Promise<string | null> {
   if (!channel.isSendable()) return null;
   try {
     const msg = await channel.send({
-      components: buildProtectRoomNoticeComponents(actionType, 0),
+      components: buildProtectRoomNoticeComponents(actionType, 0, imageUrl),
+      files: panelImageFilesForPost(imageUrl),
       flags: MessageFlags.IsComponentsV2,
     });
     return msg.id;
@@ -117,13 +144,23 @@ export async function refreshProtectRoomNotice(
 ): Promise<void> {
   if (!channel.isSendable()) return;
 
-  const components = buildProtectRoomNoticeComponents(target.actionType, count);
+  const components = buildProtectRoomNoticeComponents(target.actionType, count, target.imageUrl);
+
+  // Counter-only refresh must not re-upload the banner: the notice message
+  // already carries the file, so edit references it via attachment:// with no
+  // `files` payload (re-attaching would stack duplicates on every punish).
+  // If the stored local file went missing, render without the banner instead
+  // of editing in a broken attachment:// reference.
+  const imageMissing = isLocalPanelImageMissing(target.imageUrl);
+  const editComponents = imageMissing
+    ? buildProtectRoomNoticeComponents(target.actionType, count, null)
+    : components;
 
   // Try editing the existing notice message first.
   if (target.noticeMessageId) {
     try {
       const message = await channel.messages.fetch(target.noticeMessageId);
-      await message.edit({ components });
+      await message.edit({ components: editComponents });
       return;
     } catch (err) {
       logger.warn(
@@ -133,7 +170,7 @@ export async function refreshProtectRoomNotice(
   }
 
   // Notice is missing/deleted — re-post it and store the new id.
-  const newId = await sendProtectRoomNotice(channel, target.actionType);
+  const newId = await sendProtectRoomNotice(channel, target.actionType, target.imageUrl);
   if (newId) {
     db.prepare(
       "UPDATE protectedRooms SET noticeMessageId = ? WHERE guildId = ? AND channelId = ?",

@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS protectedRooms (
     timeoutDuration INTEGER DEFAULT 3600,
     noticeMessageId TEXT,
     actionCount INTEGER NOT NULL DEFAULT 0,
+    imageUrl TEXT,
     createdAt INTEGER NOT NULL,
     PRIMARY KEY (guildId, channelId)
 );
@@ -172,6 +173,7 @@ CREATE TABLE IF NOT EXISTS verificationConfig (
     embedTitle TEXT NOT NULL DEFAULT 'Verify yourself',
     embedDescription TEXT NOT NULL DEFAULT 'Click the button below and solve the short captcha to unlock the server.',
     successMessage TEXT NOT NULL DEFAULT 'You''re verified. Welcome to {server}!',
+    imageUrl TEXT,
     enabled BOOLEAN NOT NULL DEFAULT 1,
     createdAt INTEGER NOT NULL
 );
@@ -480,6 +482,23 @@ db.exec(`
 CREATE INDEX IF NOT EXISTS idx_messageLog_guild_user_timestamp
 ON messageLog (guildId, userId, timestamp);
 `);
+
+// Custom banner images for the /protectroom notice and /verify panel
+// (see src/lib/protectRoom.ts + src/lib/verifyManager.ts). Nullable — older
+// rows simply render without a banner.
+for (const table of ["protectedRooms", "verificationConfig"] as const) {
+  const imageUrlExists = db
+    .prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = 'imageUrl'`)
+    .get();
+  if (!imageUrlExists) {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN imageUrl TEXT;`);
+      logger.info(`Added imageUrl column to ${table}`);
+    } catch (e) {
+      logger.error(`Failed to migrate ${table} (imageUrl):`, e);
+    }
+  }
+}
 
 // Music system removed — drop the leftover musicPanels table if present.
 try {

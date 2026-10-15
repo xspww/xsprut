@@ -10,6 +10,9 @@ type Command = {
   autocomplete?: (...args: any[]) => any;
 };
 
+// Helper modules that live next to commands but are NOT slash commands.
+const NON_COMMAND_FILES = new Set(["index.ts", "index.js", "protectroomEdit.ts", "protectroomEdit.js"]);
+
 export async function loadCommands(): Promise<Record<string, Command>> {
   const commandsPath = __dirname;
   const commands: Record<string, Command> = {};
@@ -17,8 +20,7 @@ export async function loadCommands(): Promise<Record<string, Command>> {
   for (const file of fs.readdirSync(commandsPath)) {
     if (
       (!file.endsWith(".ts") && !file.endsWith(".js")) ||
-      file === "index.ts" ||
-      file === "index.js"
+      NON_COMMAND_FILES.has(file)
     ) {
       continue;
     }

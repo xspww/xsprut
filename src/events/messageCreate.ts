@@ -297,8 +297,8 @@ export async function execute(message: Message) {
           // Re-read instead of using the pre-punish cached value — a
           // concurrent punish may have incremented it in between.
           const fresh = db
-            .prepare("SELECT actionCount FROM protectedRooms WHERE guildId = ? AND channelId = ?")
-            .get(message.guildId, message.channelId) as { actionCount: number } | undefined;
+            .prepare("SELECT actionCount, imageUrl FROM protectedRooms WHERE guildId = ? AND channelId = ?")
+            .get(message.guildId, message.channelId) as { actionCount: number; imageUrl: string | null } | undefined;
           const count = fresh?.actionCount ?? protectedRoom.actionCount + 1;
 
           const target: ProtectRoomNoticeTarget = {
@@ -306,6 +306,7 @@ export async function execute(message: Message) {
             channelId: message.channelId,
             actionType: protectedRoom.actionType,
             noticeMessageId: protectedRoom.noticeMessageId,
+            imageUrl: fresh?.imageUrl ?? null,
           };
           await refreshProtectRoomNotice(message.channel, target, count);
         } catch (err) {

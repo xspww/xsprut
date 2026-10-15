@@ -57,6 +57,7 @@ export type VerificationConfig = {
   embedTitle: string;
   embedDescription: string;
   successMessage: string;
+  imageUrl: string | null;
   enabled: number;
   createdAt: number;
 };
@@ -71,8 +72,8 @@ export function getVerificationConfig(guildId: string): VerificationConfig | nul
 
 export function saveVerificationConfig(cfg: Omit<VerificationConfig, "enabled">) {
   db.prepare(
-    `INSERT INTO verificationConfig (guildId, channelId, verifiedRoleId, unverifiedRoleId, embedTitle, embedDescription, successMessage, enabled, createdAt)
-     VALUES (@guildId, @channelId, @verifiedRoleId, @unverifiedRoleId, @embedTitle, @embedDescription, @successMessage, 1, @createdAt)
+    `INSERT INTO verificationConfig (guildId, channelId, verifiedRoleId, unverifiedRoleId, embedTitle, embedDescription, successMessage, imageUrl, enabled, createdAt)
+     VALUES (@guildId, @channelId, @verifiedRoleId, @unverifiedRoleId, @embedTitle, @embedDescription, @successMessage, @imageUrl, 1, @createdAt)
      ON CONFLICT(guildId) DO UPDATE SET
        channelId = excluded.channelId,
        verifiedRoleId = excluded.verifiedRoleId,
@@ -80,6 +81,7 @@ export function saveVerificationConfig(cfg: Omit<VerificationConfig, "enabled">)
        embedTitle = excluded.embedTitle,
        embedDescription = excluded.embedDescription,
        successMessage = excluded.successMessage,
+       imageUrl = excluded.imageUrl,
        enabled = 1,
        createdAt = excluded.createdAt`,
   ).run(cfg);

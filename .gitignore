@@ -14,6 +14,7 @@ dist
 *.swp
 .DS_Store
 Thumbs.db
+data/panel-images/
 
 # Machine-specific pm2 config (kept on disk, not shared)
 ecosystem.config.js
