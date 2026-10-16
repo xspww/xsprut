@@ -40,9 +40,9 @@ export async function execute(interaction: Interaction) {
     if (allowed.length > 0 && !allowed.includes(interaction.user.id)) {
       try {
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: "You are not authorized to use this bot", flags: 64 });
+          await interaction.followUp({ content: "You are not authorized to use this bot", flags: MessageFlags.Ephemeral });
         } else {
-          await interaction.reply({ content: "You are not authorized to use this bot", flags: 64 });
+          await interaction.reply({ content: "You are not authorized to use this bot", flags: MessageFlags.Ephemeral });
         }
       } catch {}
       return;
@@ -53,9 +53,9 @@ export async function execute(interaction: Interaction) {
       logger.error(`No command matching ${interaction.commandName} was found.`);
       try {
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: "This command is unavailable (command not found)", flags: 64 });
+          await interaction.followUp({ content: "This command is unavailable (command not found)", flags: MessageFlags.Ephemeral });
         } else {
-          await interaction.reply({ content: "This command is unavailable (command not found)", flags: 64 });
+          await interaction.reply({ content: "This command is unavailable (command not found)", flags: MessageFlags.Ephemeral });
         }
       } catch (e) {
         logger.warn(`Failed to notify about missing command ${interaction.commandName}:`, e);
@@ -76,7 +76,7 @@ export async function execute(interaction: Interaction) {
         try {
           await interaction.reply({
             content: `⏳ You're using this command too quickly. Please wait **${formatCooldown(remaining)}** before trying again`,
-            flags: 64,
+            flags: MessageFlags.Ephemeral,
           });
           // Auto-delete the warning after COOLDOWN_MESSAGE_TTL_MS so it never
           // litters the chat. The timer is unref'd — it must not keep the
@@ -109,9 +109,9 @@ export async function execute(interaction: Interaction) {
       );
       try {
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: "An error occurred while processing this command!", flags: 64 });
+          await interaction.followUp({ content: "An error occurred while processing this command!", flags: MessageFlags.Ephemeral });
         } else {
-          await interaction.reply({ content: "An error occurred while processing this command!", flags: 64 });
+          await interaction.reply({ content: "An error occurred while processing this command!", flags: MessageFlags.Ephemeral });
         }
       } catch (e) {
         logger.warn(`Failed to send error reply for ${interaction.commandName}:`, e);
@@ -140,7 +140,7 @@ export async function execute(interaction: Interaction) {
         if (!guildId) return;
         const cfg = getVerificationConfig(guildId);
         if (!cfg) {
-          return interaction.reply({ content: "❌ Verification is not set up in this server", flags: 64 });
+          return interaction.reply({ content: "❌ Verification is not set up in this server", flags: MessageFlags.Ephemeral });
         }
 
         const code = createCaptchaSession(user.id);
@@ -181,7 +181,7 @@ export async function execute(interaction: Interaction) {
       } catch (err) {
         logger.error("Error in verify_start button handler:", err);
         try {
-          return interaction.reply({ content: "❌ An error occurred, please try again", flags: 64 });
+          return interaction.reply({ content: "❌ An error occurred, please try again", flags: MessageFlags.Ephemeral });
         } catch {}
       }
     }
@@ -211,25 +211,25 @@ export async function execute(interaction: Interaction) {
 
     const { user, guildId, guild } = interaction;
     if (!guildId || !guild) {
-      return interaction.reply({ content: "❌ This can only be used in a server", flags: 64 });
+      return interaction.reply({ content: "❌ This can only be used in a server", flags: MessageFlags.Ephemeral });
     }
 
     const cfg = getVerificationConfig(guildId);
     if (!cfg) {
-      return interaction.reply({ content: "❌ Verification is not set up in this server", flags: 64 });
+      return interaction.reply({ content: "❌ Verification is not set up in this server", flags: MessageFlags.Ephemeral });
     }
 
     const inputCode = interaction.fields.getTextInputValue("captcha_input").trim();
     const result = validateCaptchaSession(user.id, inputCode);
 
     if (result === "expired") {
-      return interaction.reply({ content: "⏰ The code has expired. Please press **Verify** again", flags: 64 });
+      return interaction.reply({ content: "⏰ The code has expired. Please press **Verify** again", flags: MessageFlags.Ephemeral });
     }
     if (result === "not_found") {
-      return interaction.reply({ content: "❓ Session not found. Please press **Verify** again", flags: 64 });
+      return interaction.reply({ content: "❓ Session not found. Please press **Verify** again", flags: MessageFlags.Ephemeral });
     }
     if (result === "wrong") {
-      return interaction.reply({ content: "❌ Incorrect code. Please press **Verify** again", flags: 64 });
+      return interaction.reply({ content: "❌ Incorrect code. Please press **Verify** again", flags: MessageFlags.Ephemeral });
     }
 
     // ✅ Correct! Grant/remove roles
@@ -245,12 +245,12 @@ export async function execute(interaction: Interaction) {
       }
 
       const successMsg = cfg.successMessage.replace("{server}", guild.name);
-      return interaction.reply({ content: `✅ ${successMsg}`, flags: 64 });
+      return interaction.reply({ content: `✅ ${successMsg}`, flags: MessageFlags.Ephemeral });
     } catch (err) {
       logger.error(`Failed to assign verified role to ${user.id}:`, err);
       return interaction.reply({
         content: "❌ Failed to assign the role. Please contact an admin",
-        flags: 64,
+        flags: MessageFlags.Ephemeral,
       });
     }
   }

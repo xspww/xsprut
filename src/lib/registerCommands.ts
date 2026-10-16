@@ -37,4 +37,11 @@ export async function registerCommands() {
   }
 }
 
-registerCommands();
+// CLI entry only: `npm run register-commands` (tsx src/lib/registerCommands.ts).
+// Must NOT auto-run on import — otherwise every bot boot / test would hit Discord API.
+if (
+  process.argv[1]?.replace(/\\/g, "/").endsWith("lib/registerCommands.ts") ||
+  process.argv[1]?.replace(/\\/g, "/").endsWith("lib/registerCommands.js")
+) {
+  registerCommands();
+}

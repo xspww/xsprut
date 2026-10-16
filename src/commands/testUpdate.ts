@@ -36,10 +36,10 @@ export const data = new SlashCommandBuilder()
       ),
   );
 
-async function fetchRealVersionData(channel: string): Promise<{ hash: string; version?: string }> {
-  // Unified fetch (cached + WEAO fallback for LIVE) — previously a 4th
-  // duplicate implementation. Falls back to channelState, then a static
-  // sample only if everything is unreachable.
+async function fetchRealVersionData(channel: string): Promise<{ hash: string; version?: string } | null> {
+  // Unified fetch (cached + WEAO fallback for LIVE).
+  // Returns null when unreachable — callers must reply with an error
+  // instead of sending a fake hardcoded version as a real alert.
   const details = await getRobloxVersionDetails(channel).catch((e) => {
     logger.error(`Failed to fetch real version for ${channel}:`, e);
     return null;
@@ -52,9 +52,9 @@ async function fetchRealVersionData(channel: string): Promise<{ hash: string; ve
       .get(channel) as { currentVersion: string } | undefined;
     if (row?.currentVersion) return { hash: row.currentVersion };
   } catch {
-    // ignore — fall through to the static sample
+    // ignore — fall through to null
   }
-  return { hash: "version-145f189a6a974303", version: "0.732.23.7321040" };
+  return null;
 }
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -69,7 +69,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   if (type === "roblox-live") {
-    const { hash, version } = await fetchRealVersionData("LIVE");
+    const real = await fetchRealVersionData("LIVE");
+    if (!real) {
+      return interaction.editReply("❌ Could not fetch version info right now, please try again later");
+    }
+    const { hash, version } = real;
     const configured = getAlerts("LIVE", interaction.guildId ?? undefined);
     if (configured.length === 0) {
       return interaction.editReply(
@@ -85,7 +89,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   if (type === "roblox-zbeta") {
-    const { hash, version } = await fetchRealVersionData("ZBeta");
+    const real = await fetchRealVersionData("ZBeta");
+    if (!real) {
+      return interaction.editReply("❌ Could not fetch version info right now, please try again later");
+    }
+    const { hash, version } = real;
     const configured = getAlerts("ZBeta", interaction.guildId ?? undefined);
     if (configured.length === 0) {
       return interaction.editReply(
@@ -100,7 +108,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (type === "executor-alert") {
     const exploits = await fetchExecutorData();
-    const { hash: robloxVersion } = await fetchRealVersionData("LIVE");
+    const realVersion = await fetchRealVersionData("LIVE");
+    const robloxVersion = realVersion?.hash ?? "unknown";
 
     // Check if configured alert channels exist in this server (guild)
     const configuredAlerts = db
@@ -129,7 +138,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       );
     }
 
-    // If no configured alerts, fallback to sending only to the channel where the command was used
+    // If no configured alerts, fallback to sending only to the channel where the command was used.
+    // NOTE: "Madium" + "1.7.0" is an intentional clearly-test-only sample for `/test`
+    // preview when WEAO returns nothing — never used in real alerts.
     const workingSample = exploits.find((e) => e.title && e.version) || {
       title: "Madium",
       version: "1.7.0",

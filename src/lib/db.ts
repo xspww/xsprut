@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS protectedRooms (
     guildId TEXT NOT NULL,
     channelId TEXT NOT NULL,
     actionType TEXT NOT NULL DEFAULT 'ban',
-    timeoutDuration INTEGER DEFAULT 3600,
+    timeoutDuration INTEGER DEFAULT 3600000,
     noticeMessageId TEXT,
     actionCount INTEGER NOT NULL DEFAULT 0,
     imageUrl TEXT,
@@ -414,12 +414,21 @@ if (!actionTypeExists || !timeoutDurationExists) {
       db.exec(`ALTER TABLE protectedRooms ADD COLUMN actionType TEXT NOT NULL DEFAULT 'ban';`);
     }
     if (!timeoutDurationExists) {
-      db.exec(`ALTER TABLE protectedRooms ADD COLUMN timeoutDuration INTEGER DEFAULT 3600;`);
+      db.exec(`ALTER TABLE protectedRooms ADD COLUMN timeoutDuration INTEGER DEFAULT 3600000;`);
     }
     logger.info("Updated protectedRooms table with actionType and timeoutDuration columns");
   } catch (e) {
     logger.error("Failed to migrate protectedRooms:", e);
   }
+}
+
+// Data migration: timeoutDuration is in ms (see protectroom.ts: timeoutMinutes * 60 * 1000).
+// Old rows used seconds (e.g. 3600 = 1h). New values are always >= 60000 (min 1 minute),
+// so convert small legacy values to ms once.
+try {
+  db.exec(`UPDATE protectedRooms SET timeoutDuration = timeoutDuration * 1000 WHERE timeoutDuration > 0 AND timeoutDuration < 60000;`);
+} catch (e) {
+  logger.error("Failed to migrate protectedRooms timeout unit:", e);
 }
 
 // Migration for protectedRooms: add noticeMessageId and actionCount columns if missing

@@ -54,9 +54,9 @@ export const PROTECT_ACTION_META: Record<
   }
 > = {
   ban: {
-    countLabel: "Kicks",
+    countLabel: "Bans",
     description:
-      "This channel is used to catch spam bots. Any messages sent here will result in a **softban**.",
+      "This channel is used to catch spam bots. Any messages sent here will result in a **permanent ban**.",
     displayName: "🔒 Ban (Permanent)",
     permission: PermissionFlagsBits.BanMembers,
   },

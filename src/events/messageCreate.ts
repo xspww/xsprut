@@ -52,7 +52,8 @@ export async function execute(message: Message) {
       cleanupStarted = true;
       const sweepTimer = setInterval(() => {
         try {
-          // Delete rows older than 2 minutes (120,000 ms)
+          // Delete rows older than 2 minutes (120,000 ms).
+          // Runs every 5 minutes — rows can linger up to ~7 min, fine for cleanup.
           const threshold = Date.now() - 120_000;
           stmtDeleteOldMessages.run(threshold);
         } catch (e) {

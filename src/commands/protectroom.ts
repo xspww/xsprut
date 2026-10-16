@@ -21,6 +21,7 @@ import {
   persistPanelImageFromUrl,
   resolvePanelImageInput,
 } from "../lib/panelImage";
+import { editProtectRoom } from "./protectroomEdit";
 
 export const data = new SlashCommandBuilder()
   .setName("protectroom")
@@ -47,6 +48,7 @@ export const data = new SlashCommandBuilder()
           .setDescription("Timeout duration in minutes (only when Timeout is selected, default: 60)")
           .setRequired(false)
           .setMinValue(1)
+          // 40320 minutes = 28 days = Discord timeout max
           .setMaxValue(40320)
       )
       .addAttachmentOption((option) =>
@@ -249,8 +251,6 @@ export async function statusProtectRoom(interaction: ChatInputCommandInteraction
 
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
-
-import { editProtectRoom } from "./protectroomEdit";
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   const sub = interaction.options.getSubcommand(true);
