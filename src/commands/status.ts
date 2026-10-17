@@ -33,8 +33,8 @@ export const data = new SlashCommandBuilder()
       .setDescription("➕ Add a bot status message (add multiple messages to rotate automatically)")
       .addStringOption((option) =>
         option
-          .setName("type")
-          .setDescription("📡 Presence type: 📺 Streaming (shows a link) or 🟢 Online (plain text)")
+          .setName("presence")
+          .setDescription("📡 Presence mode: Streaming (with link) or Online (plain text)")
           .setRequired(true)
           .addChoices(
             { name: "📺 Streaming", value: "streaming" },
@@ -44,26 +44,26 @@ export const data = new SlashCommandBuilder()
       .addStringOption((option) =>
         option
           .setName("text")
-          .setDescription("The status text to display")
+          .setDescription("📝 Status text to display")
           .setRequired(true),
       )
       .addStringOption((option) =>
         option
-          .setName("url")
-          .setDescription("Stream URL link (only used when type = Streaming)")
+          .setName("stream_url")
+          .setDescription("🔗 Stream URL (only for Streaming mode)")
           .setRequired(false),
       )
       .addStringOption((option) =>
         option
-          .setName("custom")
-          .setDescription("Custom Status text shown on the profile card (optional, emoji allowed)")
+          .setName("custom_status")
+          .setDescription("✨ Custom status on the profile card (optional, emoji allowed)")
           .setRequired(false),
       )
       .addStringOption((option) =>
         option
           .setName("interval")
           .setDescription(
-            `⏱️ Display duration before rotating (e.g. 30s, 1m, 5m; default ${formatIntervalMs(STATUS_ROTATION_DEFAULT_INTERVAL_MS)})`,
+            `⏱️ How long to show this before rotating (e.g. 30s, 1m, 5m; default ${formatIntervalMs(STATUS_ROTATION_DEFAULT_INTERVAL_MS)})`,
           )
           .setRequired(false),
       ),
@@ -93,7 +93,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "add") {
-    const activityType = normalizeBotActivityType(interaction.options.getString("type", true));
+    const activityType = normalizeBotActivityType(interaction.options.getString("presence", true));
     const text = interaction.options.getString("text", true).trim();
     if (text === "") {
       return interaction.reply({
@@ -101,8 +101,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         flags: MessageFlags.Ephemeral,
       });
     }
-    const url = interaction.options.getString("url")?.trim();
-    const custom = interaction.options.getString("custom")?.trim();
+    const url = interaction.options.getString("stream_url")?.trim();
+    const custom = interaction.options.getString("custom_status")?.trim();
 
     const intervalRaw = interaction.options.getString("interval");
     let intervalMs = STATUS_ROTATION_DEFAULT_INTERVAL_MS;

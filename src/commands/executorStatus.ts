@@ -43,46 +43,46 @@ export const data = new SlashCommandBuilder()
           .addStringOption((o) =>
             o
               .setName("display")
-              .setDescription("🎨 Display format")
+              .setDescription("🎨 How to show this tracker")
               .setRequired(true)
               .addChoices(
                 { name: "🔊 Voice Channel — Rename channel by status", value: "voice" },
                 { name: "💬 Text Channel — Rename channel by status", value: "chat" },
-                { name: "📊 Embed Status — Create a status embed updated every 1 minute", value: "embed" },
-                { name: "📢 Alert Message — Send an alert message on updates", value: "alert" },
+                { name: "📊 Embed Status — Post a status embed that auto-updates", value: "embed" },
+                { name: "📢 Alert Message — Send a message when the executor updates", value: "alert" },
               ),
           )
           .addStringOption((o) =>
             o
               .setName("executor")
-              .setDescription("🔍 Executor name (type to search)")
+              .setDescription("🔍 Executor name (start typing to search)")
               .setRequired(true)
               .setAutocomplete(true),
           )
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("📨 Text channel (for Alert Message / Embed Status mode)")
+              .setDescription("📨 Target channel — required for Embed Status / Alert Message")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildText),
           )
           .addStringOption((o) =>
             o
               .setName("content")
-              .setDescription("💬 Message before the embed (optional)")
+              .setDescription("💬 Custom message for the post — Embed Status / Alert only (optional)")
               .setRequired(false),
           )
           .addChannelOption((o) =>
             o
               .setName("category")
-              .setDescription("📁 Category (for Voice/Text Channel mode, to create a sub-channel)")
+              .setDescription("📁 Category for a new sub-channel — required for Voice/Text mode")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildCategory),
           )
           .addStringOption((o) =>
             o
               .setName("interval")
-              .setDescription("⏱️ Embed auto-update frequency (e.g. 30s, 1m, 5m; min 10s, max 1h)")
+              .setDescription("⏱️ Embed update frequency, e.g. 30s, 1m, 5m (10s–1h)")
               .setRequired(false),
           ),
       )
@@ -93,7 +93,7 @@ export const data = new SlashCommandBuilder()
           .addStringOption((o) =>
             o
               .setName("display")
-              .setDescription("🎨 Display format to remove")
+              .setDescription("🎨 Tracker type to remove")
               .setRequired(true)
               .addChoices(
                 { name: "🔊 Voice Channel", value: "voice" },
@@ -105,14 +105,14 @@ export const data = new SlashCommandBuilder()
           .addStringOption((o) =>
             o
               .setName("executor")
-              .setDescription("🔍 Executor name (type to search)")
+              .setDescription("🔍 Executor name (start typing to search)")
               .setRequired(true)
               .setAutocomplete(true),
           )
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("📨 Text channel (for Alert Message / Embed Status mode)")
+              .setDescription("📨 Channel the tracker was set up in (Embed Status / Alert Message)")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildText),
           ),
@@ -120,24 +120,24 @@ export const data = new SlashCommandBuilder()
       .addSubcommand((sub) =>
         sub
           .setName("edit")
-          .setDescription("✏️ Edit the message or update frequency of Embed Status / Alert")
+          .setDescription("✏️ Change the message or update frequency of an Embed Status / Alert")
           .addStringOption((o) =>
             o
               .setName("executor")
-              .setDescription("🔍 Executor name (type to search)")
+              .setDescription("🔍 Executor name (start typing to search)")
               .setRequired(true)
               .setAutocomplete(true),
           )
           .addStringOption((o) =>
             o
               .setName("content")
-              .setDescription("💬 New message before the embed (optional)")
+              .setDescription("💬 New custom message for the post (optional)")
               .setRequired(false),
           )
           .addStringOption((o) =>
             o
               .setName("interval")
-              .setDescription("⏱️ New embed auto-update frequency (e.g. 30s, 1m, 5m)")
+              .setDescription("⏱️ New embed update frequency, e.g. 30s, 1m, 5m (10s–1h)")
               .setRequired(false),
           ),
       )
@@ -161,7 +161,7 @@ export const data = new SlashCommandBuilder()
           .addStringOption((o) =>
             o
               .setName("mode")
-              .setDescription("🎨 Channel name format")
+              .setDescription("🎨 How the channel name is built")
               .setRequired(true)
               .addChoices(
                 { name: "✏️ Custom — Set a custom channel name", value: "custom" },
@@ -171,27 +171,27 @@ export const data = new SlashCommandBuilder()
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("🔊 Select an existing voice channel")
+              .setDescription("🔊 Existing voice channel to use")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildVoice),
           )
           .addChannelOption((o) =>
             o
               .setName("category")
-              .setDescription("📁 Or select a category for the bot to create a new channel")
+              .setDescription("📁 Or a category where a new channel is created")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildCategory),
           )
           .addStringOption((o) =>
             o
               .setName("display_name")
-              .setDescription("✏️ Desired channel name (for Custom mode)")
+              .setDescription("✏️ Channel name to use (Custom mode only)")
               .setRequired(false),
           )
           .addStringOption((o) =>
             o
               .setName("roblox_channel")
-              .setDescription("📡 Select a Roblox channel (for Roblox Version mode)")
+              .setDescription("📡 Roblox channel to follow (Roblox Version mode only)")
               .setRequired(false)
               .addChoices(
                 { name: "🟢 LIVE", value: "LIVE" },
@@ -222,7 +222,7 @@ export const data = new SlashCommandBuilder()
           .addStringOption((o) =>
             o
               .setName("mode")
-              .setDescription("🎨 Channel name format")
+              .setDescription("🎨 How the channel name is built")
               .setRequired(true)
               .addChoices(
                 { name: "✏️ Custom — Set a custom channel name", value: "custom" },
@@ -232,27 +232,27 @@ export const data = new SlashCommandBuilder()
           .addChannelOption((o) =>
             o
               .setName("channel")
-              .setDescription("💬 Select an existing text channel")
+              .setDescription("💬 Existing text channel to use")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildText),
           )
           .addChannelOption((o) =>
             o
               .setName("category")
-              .setDescription("📁 Or select a category for the bot to create a new channel")
+              .setDescription("📁 Or a category where a new channel is created")
               .setRequired(false)
               .addChannelTypes(ChannelType.GuildCategory),
           )
           .addStringOption((o) =>
             o
               .setName("display_name")
-              .setDescription("✏️ Desired channel name (for Custom mode)")
+              .setDescription("✏️ Channel name to use (Custom mode only)")
               .setRequired(false),
           )
           .addStringOption((o) =>
             o
               .setName("roblox_channel")
-              .setDescription("📡 Select a Roblox channel (for Roblox Version mode)")
+              .setDescription("📡 Roblox channel to follow (Roblox Version mode only)")
               .setRequired(false)
               .addChoices(
                 { name: "🟢 LIVE", value: "LIVE" },

@@ -18,7 +18,7 @@ export const data = new SlashCommandBuilder()
       .addStringOption((option) =>
         option
           .setName("message")
-          .setDescription("Welcome message after the mention (e.g. Welcome) — optional")
+          .setDescription("💬 Welcome text shown after the mention (optional)")
           .setRequired(false),
       ),
   )

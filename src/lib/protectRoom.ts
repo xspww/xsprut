@@ -28,7 +28,7 @@ import {
  *   - a bold title ("DO NOT SEND MESSAGES IN THIS CHANNEL")
  *   - a body line explaining the punishment
  *   - a disabled gray pill at the bottom showing how many people have been
- *     punished so far (e.g. "Kicks: 42" / "Timeouts: 42")
+ *     punished so far (e.g. "Bans: 42" / "Timeouts: 42")
  */
 
 /** The punishment applied to users who post in a protected room. */

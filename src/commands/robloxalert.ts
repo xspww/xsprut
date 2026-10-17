@@ -20,7 +20,7 @@ export const data = new SlashCommandBuilder()
       .addStringOption((option) =>
         option
           .setName("roblox_channel")
-          .setDescription("The Roblox channel to track")
+          .setDescription("🎮 Roblox channel to track")
           .setRequired(true)
           .addChoices(
             ...ROBLOX_CHANNELS.map((channel) => ({
@@ -31,15 +31,15 @@ export const data = new SlashCommandBuilder()
       )
       .addChannelOption((option) =>
         option
-          .setName("discord_channel")
-          .setDescription("📨 Discord channel to send alerts to (omit = this channel)")
+          .setName("channel")
+          .setDescription("📨 Target channel for alerts (default: current channel)")
           .setRequired(false)
           .addChannelTypes(ChannelType.GuildText),
       )
       .addStringOption((option) =>
         option
           .setName("message")
-          .setDescription("Message before the embed (e.g. @everyone) — optional")
+          .setDescription("💬 Custom message sent before the alert (e.g. @everyone)")
           .setRequired(false),
       ),
   )
@@ -50,7 +50,7 @@ export const data = new SlashCommandBuilder()
       .addStringOption((option) =>
         option
           .setName("roblox_channel")
-          .setDescription("The Roblox channel to disable alerts for")
+          .setDescription("🎮 Roblox channel to stop tracking")
           .setRequired(true)
           .addChoices(
             ...ROBLOX_CHANNELS.map((channel) => ({
@@ -61,8 +61,8 @@ export const data = new SlashCommandBuilder()
       )
       .addChannelOption((option) =>
         option
-          .setName("discord_channel")
-          .setDescription("📨 Discord channel to disable alerts in (omit = this channel)")
+          .setName("channel")
+          .setDescription("📨 Target channel to disable alerts in (default: current channel)")
           .setRequired(false)
           .addChannelTypes(ChannelType.GuildText),
       ),
@@ -89,7 +89,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const robloxChannel = interaction.options.getString("roblox_channel", true);
   const targetChannelId =
-    interaction.options.getChannel("discord_channel", false)?.id ??
+    interaction.options.getChannel("channel", false)?.id ??
     interaction.channelId;
 
   if (subcommand === "add") {

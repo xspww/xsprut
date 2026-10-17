@@ -34,8 +34,8 @@ export async function editProtectRoom(interaction: ChatInputCommandInteraction) 
       flags: MessageFlags.Ephemeral,
     });
   }
-  const imageUrlOption = interaction.options.getString("image_url");
-  const attachment = interaction.options.getAttachment("image");
+  const imageUrlOption = interaction.options.getString("banner_url");
+  const attachment = interaction.options.getAttachment("banner");
   const wantsClear = !attachment && imageUrlOption?.trim().toLowerCase() === "clear";
   let nextImage: string | null = row.imageUrl;
   if (wantsClear) {
@@ -50,7 +50,7 @@ export async function editProtectRoom(interaction: ChatInputCommandInteraction) 
     if (resolved.error) return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     if (!resolved.image) {
       return interaction.reply({
-        content: "ℹ️ Nothing to change — attach an `image`, give an `image_url`, or use `image_url:clear`",
+        content: "ℹ️ Nothing to change — attach a `banner`, give a `banner_url`, or set `banner_url` to `clear`",
         flags: MessageFlags.Ephemeral,
       });
     }

@@ -80,7 +80,7 @@ Type `/help` in Discord to see every command. `/help` and `/ver` are the quickes
 | --- | --- |
 | Roblox updates | `/robloxalert add\|remove\|list`, `/ver` |
 | Executors | `/ex track\|voice\|chat` — `add`, `edit`, `remove`, `list`, `refresh` |
-| Security | `/protectroom setup\|remove\|view`, `/whitelist add\|remove\|list`, `/verify setup\|remove` |
+| Security | `/protectroom setup\|edit\|remove\|view`, `/whitelist add\|remove\|list`, `/verify setup\|remove` |
 | Other | `/status`, `/joinalert`, `/cleanup run\|preview`, `/config`, `/test`, `/help` |
 
 All commands require the **Administrator** permission. Run `/help` in Discord for full usage details.

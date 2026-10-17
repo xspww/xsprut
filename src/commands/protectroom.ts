@@ -35,7 +35,7 @@ export const data = new SlashCommandBuilder()
       .addStringOption((option) =>
         option
           .setName("action")
-          .setDescription("Action to take when someone sends a message")
+          .setDescription("What to do when someone sends a message in this channel")
           .setRequired(true)
           .addChoices(
             { name: "🔒 Ban (permanent)", value: "ban" },
@@ -44,8 +44,8 @@ export const data = new SlashCommandBuilder()
       )
       .addIntegerOption((option) =>
         option
-          .setName("timeout_minutes")
-          .setDescription("Timeout duration in minutes (only when Timeout is selected, default: 60)")
+          .setName("duration")
+          .setDescription("⏱️ Timeout length in minutes — only for Timeout (1-40320, default 60)")
           .setRequired(false)
           .setMinValue(1)
           // 40320 minutes = 28 days = Discord timeout max
@@ -53,14 +53,14 @@ export const data = new SlashCommandBuilder()
       )
       .addAttachmentOption((option) =>
         option
-          .setName("image")
-          .setDescription("🖼️ Banner image uploaded with the command (shown on top of the notice)")
+          .setName("banner")
+          .setDescription("🖼️ Banner image uploaded with the command (shown above the warning)")
           .setRequired(false)
       )
       .addStringOption((option) =>
         option
-          .setName("image_url")
-          .setDescription("🔗 Direct https link to a banner image (upload above wins)")
+          .setName("banner_url")
+          .setDescription("🔗 Banner image HTTPS link (ignored if a banner is uploaded)")
           .setRequired(false)
       )
   )
@@ -70,14 +70,14 @@ export const data = new SlashCommandBuilder()
       .setDescription("✏️ Change the banner image without resetting the counter")
       .addAttachmentOption((option) =>
         option
-          .setName("image")
-          .setDescription("🖼️ New banner image (upload wins over image_url)")
+          .setName("banner")
+          .setDescription("🖼️ New banner image (replaces the current one)")
           .setRequired(false)
       )
       .addStringOption((option) =>
         option
-          .setName("image_url")
-          .setDescription("🔗 Direct https link, or 'clear' to remove the banner")
+          .setName("banner_url")
+          .setDescription("🔗 Banner image HTTPS link, or 'clear' to remove the banner")
           .setRequired(false)
       )
   )
@@ -118,8 +118,8 @@ export async function setProtectRoom(
   }
 
   // ─── Optional banner image (upload wins over URL) ──────────────────────
-  const attachment = interaction.options.getAttachment("image");
-  const imageUrlOption = interaction.options.getString("image_url");
+  const attachment = interaction.options.getAttachment("banner");
+  const imageUrlOption = interaction.options.getString("banner_url");
   const resolved = resolvePanelImageInput(
     attachment
       ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType, size: attachment.size }
@@ -257,7 +257,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (sub === "setup") {
     const action = interaction.options.getString("action", true) as ProtectAction;
-    const timeoutMinutes = interaction.options.getInteger("timeout_minutes") ?? 60;
+    const timeoutMinutes = interaction.options.getInteger("duration") ?? 60;
     return setProtectRoom(interaction, action, timeoutMinutes);
   }
 

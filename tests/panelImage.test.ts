@@ -22,7 +22,8 @@ describe("resolvePanelImageInput", () => {
       "https://example.com/other.png",
     );
     assert.equal(res.image?.kind, "attachment");
-    assert.match(res.note ?? "", /ignoring `image_url`/);
+    if (res.image?.kind !== "attachment") throw new Error("expected the uploaded attachment to win");
+    assert.equal(res.image.url, "https://cdn.discordapp.com/attachments/a/banner.png");
   });
 
   it("rejects non-image uploads and oversized files", () => {

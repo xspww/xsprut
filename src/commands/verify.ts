@@ -45,7 +45,7 @@ export const data = new SlashCommandBuilder()
       .addChannelOption((o) =>
         o
           .setName("channel")
-          .setDescription("📨 Channel to send the verification panel to (default: current channel)")
+          .setDescription("📨 Channel for the verification panel (default: current channel)")
           .setRequired(false),
       )
       .addRoleOption((o) =>
@@ -57,31 +57,31 @@ export const data = new SlashCommandBuilder()
       .addStringOption((o) =>
         o
           .setName("title")
-          .setDescription("📋 Title of the verification panel embed (default: Verify yourself)")
+          .setDescription("📋 Panel title (default: Verify yourself)")
           .setRequired(false),
       )
       .addStringOption((o) =>
         o
           .setName("description")
-          .setDescription("📝 Description of the verification panel embed")
+          .setDescription("📝 Panel description shown under the title")
           .setRequired(false),
       )
       .addStringOption((o) =>
         o
           .setName("success_message")
-          .setDescription("🎉 Message shown upon successful verification (use {server} for the server name)")
+          .setDescription("🎉 Message after verification (use {server} for the server name)")
           .setRequired(false),
       )
       .addAttachmentOption((o) =>
         o
-          .setName("image")
-          .setDescription("🖼️ Banner image uploaded with the command (shown on top of the panel)")
+          .setName("banner")
+          .setDescription("🖼️ Banner image uploaded with the command (shown above the panel)")
           .setRequired(false),
       )
       .addStringOption((o) =>
         o
-          .setName("image_url")
-          .setDescription("🔗 Direct https link to a banner image (upload above wins)")
+          .setName("banner_url")
+          .setDescription("🔗 Banner image HTTPS link (ignored if a banner is uploaded)")
           .setRequired(false),
       ),
   )
@@ -117,12 +117,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     // Optional banner image (upload wins over URL). Uploaded files are
     // persisted to the local store (like /protectroom) so re-running setup
     // keeps showing the banner the admin configured last time.
-    const attachment = interaction.options.getAttachment("image");
+    const attachment = interaction.options.getAttachment("banner");
     const resolved = resolvePanelImageInput(
       attachment
         ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType, size: attachment.size }
         : null,
-      interaction.options.getString("image_url"),
+      interaction.options.getString("banner_url"),
     );
     if (resolved.error) {
       return interaction.editReply(resolved.error);

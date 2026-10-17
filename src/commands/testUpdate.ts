@@ -25,8 +25,8 @@ export const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption((option) =>
     option
-      .setName("type")
-      .setDescription("Select the alert type to test")
+      .setName("alert_type")
+      .setDescription("Select which alert to preview")
       .setRequired(true)
       .addChoices(
         { name: "🟥 Roblox Update — LIVE", value: "roblox-live" },
@@ -65,7 +65,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
-  const type = interaction.options.getString("type", true);
+  const type = interaction.options.getString("alert_type", true);
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   if (type === "roblox-live") {
@@ -109,7 +109,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (type === "executor-alert") {
     const exploits = await fetchExecutorData();
     const realVersion = await fetchRealVersionData("LIVE");
-    const robloxVersion = realVersion?.hash ?? "unknown";
+    const robloxVersion = realVersion?.hash ?? "N/A";
 
     // Check if configured alert channels exist in this server (guild)
     const configuredAlerts = db
@@ -125,9 +125,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           (e) => e.title?.toLowerCase() === alert.executorName.toLowerCase(),
         );
 
+        // Preview only — when WEAO has no data for this executor, keep the real
+        // display name but leave the version empty (rendered as "N/A") instead
+        // of inventing a fake one.
         const exploitData: WeaoExploit = matchingExploit
           ? { ...matchingExploit, title: alert.displayName, updateStatus: true }
-          : { title: alert.displayName, version: "1.7.0", updateStatus: true };
+          : { title: alert.displayName, updateStatus: true };
 
         // Pass interaction.guildId to ensure sendExecutorUpdateAlert only targets channels in this guild
         await sendExecutorUpdateAlert(exploitData, robloxVersion, alert.executorName, interaction.guildId ?? undefined);
@@ -138,19 +141,21 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       );
     }
 
-    // If no configured alerts, fallback to sending only to the channel where the command was used.
-    // NOTE: "Madium" + "1.7.0" is an intentional clearly-test-only sample for `/test`
-    // preview when WEAO returns nothing — never used in real alerts.
-    const workingSample = exploits.find((e) => e.title && e.version) || {
-      title: "Madium",
-      version: "1.7.0",
-    } as WeaoExploit;
+    // No configured alerts — preview in the current channel using a real WEAO
+    // entry. Never fabricate an executor or version: if WEAO is unreachable,
+    // report it instead of sending a fake alert.
+    const workingSample = exploits.find(
+      (e): e is WeaoExploit & { title: string; version: string } => Boolean(e.title && e.version),
+    );
+    if (!workingSample) {
+      return interaction.editReply("❌ Could not fetch executor data right now, please try again later");
+    }
 
     const nowUnix = Math.floor(Date.now() / 1000);
-    const verDisplay = workingSample.version?.trim() || "N/A";
+    const verDisplay = workingSample.version.trim();
 
     const container = createExecutorUpdateContainer({
-      displayName: workingSample.title || "Madium",
+      displayName: workingSample.title,
       verDisplay,
       robloxVersion,
       banwaveText: formatLastBanwave(workingSample.detectionReason),

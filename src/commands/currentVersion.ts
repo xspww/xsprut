@@ -13,8 +13,8 @@ export const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption((option) =>
     option
-      .setName("channel")
-      .setDescription("Roblox channel to check (default: LIVE)")
+      .setName("roblox_channel")
+      .setDescription("🎮 Roblox channel to check (default: LIVE)")
       .setRequired(false)
       .addChoices(
         ...ROBLOX_CHANNELS.map((channel) => ({
@@ -25,7 +25,7 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  const channel = interaction.options.getString("channel") || "LIVE";
+  const channel = interaction.options.getString("roblox_channel") || "LIVE";
   // Cached (30s) + WEAO fallback for LIVE — previously a direct fetch with
   // neither, so every /ver hit Roblox and LIVE outages always errored.
   const version = await getRobloxVersion(channel);

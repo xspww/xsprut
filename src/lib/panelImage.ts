@@ -7,8 +7,8 @@ import fetch from "node-fetch";
  * (/verify setup, /protectroom setup/edit).
  *
  * Two input styles (upload wins when both are given):
- *   - `image`: file uploaded with the slash command (Discord Attachment)
- *   - `image_url`: direct https link to an image
+ *   - `banner`: file uploaded with the slash command (Discord Attachment)
+ *   - `banner_url`: direct https link to an image
  *
  * Pure module — no DB / discord.js imports so it stays unit-testable.
  */
@@ -31,7 +31,6 @@ export type ResolvedPanelImage =
 export type ResolvePanelImageResult = {
   image: ResolvedPanelImage | null;
   error?: string;
-  note?: string;
 };
 
 const IMAGE_EXT_BY_CONTENT_TYPE: Record<string, string> = {
@@ -139,7 +138,7 @@ export async function persistPanelImageFromUrl(
   } catch (e: any) {
     if (e?.name === "AbortError") throw new Error("❌ Downloading the image timed out, please try again");
     if (e?.message === "not an image") throw new Error("❌ The uploaded file is not an image");
-    if (e?.message === "too large (max 8MB)") throw new Error("❌ `image` is too large — max 8MB");
+    if (e?.message === "too large (max 8MB)") throw new Error("❌ `banner` is too large — max 8MB");
     throw new Error("❌ Could not download the uploaded image, please try again");
   } finally {
     clearTimeout(timer);
@@ -177,7 +176,7 @@ export function isLocalPanelImageMissing(stored: string | null | undefined): boo
 
 
 /**
- * Resolve the `image` / `image_url` slash options into a single image source.
+ * Resolve the `banner` / `banner_url` slash options into a single image source.
  * Returns `{ image: null }` when neither is given, or `{ error }` with a
  * user-facing message when the input is invalid.
  */
@@ -187,10 +186,10 @@ export function resolvePanelImageInput(
 ): ResolvePanelImageResult {
   if (attachment) {
     if (!attachment.contentType?.toLowerCase().startsWith("image/")) {
-      return { image: null, error: "❌ `image` must be an image file (PNG, JPG, GIF or WEBP)" };
+      return { image: null, error: "❌ `banner` must be an image file (PNG, JPG, GIF or WEBP)" };
     }
     if (typeof attachment.size === "number" && attachment.size > PANEL_IMAGE_MAX_BYTES) {
-      return { image: null, error: "❌ `image` is too large — max 8MB" };
+      return { image: null, error: "❌ `banner` is too large — max 8MB" };
     }
     if (!attachment.url || !/^https?:\/\//i.test(attachment.url)) {
       return { image: null, error: "❌ Could not read the uploaded image, please try uploading again" };
@@ -201,7 +200,6 @@ export function resolvePanelImageInput(
         url: attachment.url,
         filename: sanitizeImageFilename(attachment.name, attachment.contentType),
       },
-      note: imageUrl?.trim() ? "ℹ️ Using the uploaded `image` (ignoring `image_url`)" : undefined,
     };
   }
 
@@ -210,7 +208,7 @@ export function resolvePanelImageInput(
   if (trimmed.length > PANEL_IMAGE_URL_MAX_LENGTH || !/^https?:\/\/\S+$/i.test(trimmed)) {
     return {
       image: null,
-      error: "❌ `image_url` must be a direct https link to an image (e.g. https://example.com/banner.png)",
+      error: "❌ `banner_url` must be a direct https link to an image (e.g. https://example.com/banner.png)",
     };
   }
   return { image: { kind: "url", url: trimmed } };

@@ -18,22 +18,22 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((subcommand) =>
     subcommand
       .setName("add")
-      .setDescription("➕ Add a Bot ID to the allowlist")
+      .setDescription("➕ Allow a bot to join the server")
       .addStringOption((option) =>
         option
           .setName("bot_id")
-          .setDescription("Discord user ID of the bot to allow")
+          .setDescription("🤖 Discord ID of the bot to allow")
           .setRequired(true),
       ),
   )
   .addSubcommand((subcommand) =>
     subcommand
       .setName("remove")
-      .setDescription("➖ Remove a Bot ID from the allowlist")
+      .setDescription("➖ Remove a bot from the allowlist")
       .addStringOption((option) =>
         option
           .setName("bot_id")
-          .setDescription("Discord user ID of the bot to remove from the allowlist")
+          .setDescription("🤖 Discord ID of the bot to remove")
           .setRequired(true),
       ),
   )
