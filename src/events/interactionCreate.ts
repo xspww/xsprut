@@ -66,7 +66,7 @@ export async function execute(interaction: Interaction) {
     // ─── Anti-spam cooldown (rate limiting) ────────────────────────────────
     // Commands may export a custom `cooldownMs`; 0 disables the cooldown for
     // that command. Default comes from COMMAND_COOLDOWN_MS (5s).
-    const cooldownMs = (command as any).cooldownMs ?? config.COMMAND_COOLDOWN_MS;
+    const cooldownMs = command.cooldownMs ?? config.COMMAND_COOLDOWN_MS;
     if (cooldownMs > 0) {
       const remaining = checkCooldown(
         `${interaction.user.id}:${interaction.commandName}`,
@@ -230,6 +230,12 @@ export async function execute(interaction: Interaction) {
     }
     if (result === "wrong") {
       return interaction.reply({ content: "❌ Incorrect code. Please press **Verify** again", flags: MessageFlags.Ephemeral });
+    }
+    if (result === "locked") {
+      return interaction.reply({
+        content: "🚫 Too many incorrect attempts. Please press **Verify** to get a new code",
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     // ✅ Correct! Grant/remove roles

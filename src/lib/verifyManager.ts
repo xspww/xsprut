@@ -6,11 +6,23 @@ import db from "../lib/db";
 type CaptchaSession = {
   code: string;
   expiresAt: number;
+  attempts: number;
 };
 
 const captchaSessions = new Map<string, CaptchaSession>();
 
-const CAPTCHA_TTL_MS = 3 * 60 * 1000; // 3 minutes
+export const CAPTCHA_TTL_MS = 3 * 60 * 1000; // 3 minutes
+// A 4-digit code is only 10,000 possibilities, so unlimited guesses inside the
+// TTL window are brute-forceable. After this many wrong guesses the session is
+// destroyed and the user must request a fresh code.
+export const CAPTCHA_MAX_ATTEMPTS = 3;
+
+export type CaptchaResult =
+  | "correct"
+  | "wrong"
+  | "expired"
+  | "not_found"
+  | "locked";
 
 // Sessions are only deleted on validation, so users who click "Verify" and
 // never submit would otherwise leave entries in the map forever. Sweep expired
@@ -31,18 +43,37 @@ export function createCaptchaSession(userId: string): string {
   captchaSessions.set(userId, {
     code,
     expiresAt: Date.now() + CAPTCHA_TTL_MS,
+    attempts: 0,
   });
   return code;
 }
 
-export function validateCaptchaSession(userId: string, input: string): "correct" | "wrong" | "expired" | "not_found" {
+/**
+ * Validate a submitted code.
+ *
+ * `now` is injectable so tests can exercise expiry without waiting.
+ * Wrong guesses are counted: once `CAPTCHA_MAX_ATTEMPTS` is reached the session
+ * is destroyed (`"locked"`) and the user must start over with a new code.
+ */
+export function validateCaptchaSession(
+  userId: string,
+  input: string,
+  now: number = Date.now(),
+): CaptchaResult {
   const session = captchaSessions.get(userId);
   if (!session) return "not_found";
-  if (Date.now() > session.expiresAt) {
+  if (now > session.expiresAt) {
     captchaSessions.delete(userId);
     return "expired";
   }
-  if (input.trim() !== session.code) return "wrong";
+  if (input.trim() !== session.code) {
+    session.attempts += 1;
+    if (session.attempts >= CAPTCHA_MAX_ATTEMPTS) {
+      captchaSessions.delete(userId);
+      return "locked";
+    }
+    return "wrong";
+  }
   captchaSessions.delete(userId);
   return "correct";
 }
