@@ -142,3 +142,7 @@ npm run pm2:start
   flow) is not covered by the unit tests. Use
   [`docs/test-guild-checklist.md`](docs/test-guild-checklist.md) before a
   release.
+
+## License
+
+Released under the [MIT License](LICENSE).
