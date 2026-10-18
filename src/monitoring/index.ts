@@ -14,6 +14,7 @@ import {
   getWEAORobloxVersion,
 } from "../lib/weaoVersions";
 import { sendUpdate, sendPreUpdate, sendRevert } from "./alerts";
+import { ConfirmationTracker } from "./confirmation";
 
 function addVersion(hash: string, channel: string) {
   db.prepare(
@@ -131,12 +132,12 @@ const missingChannels = new Set<RobloxChannel>();
 const CONFIRM_REQUIRED = 2;
 const REVERT_COOLDOWN_MS = 30 * 60 * 1000;
 
-const pendingConfirmation = new Map<RobloxChannel, { hash: string; count: number }>();
+const confirmationTracker = new ConfirmationTracker(CONFIRM_REQUIRED);
 const lastRevertAlertAt = new Map<string, number>();
 
 /** Test hook — clears in-memory confirmation + cooldown state. */
 export function __resetMonitoringState() {
-  pendingConfirmation.clear();
+  confirmationTracker.reset();
   lastRevertAlertAt.clear();
   missingChannels.clear();
   weaoFallbackActive = false;
@@ -211,27 +212,23 @@ export async function checkChannel(channel: RobloxChannel): Promise<boolean> {
 
   if (currentState && currentState.currentVersion === hash) {
     // Stable — any half-confirmed challenger is dead.
-    pendingConfirmation.delete(channel);
+    confirmationTracker.clear(channel);
     return true;
   }
 
   // Layer 1 — confirmation: require the same new hash on consecutive ticks
   // before it can move state or alert. Single-tick jitter (CDN edge
   // inconsistency, one-off fallback) dies here with no side effects.
-  const pending = pendingConfirmation.get(channel);
-  if (!pending || pending.hash !== hash) {
-    pendingConfirmation.set(channel, { hash, count: 1 });
-    logger.info(
-      `${channel}: new hash ${hash} seen${isFallback ? " (WEAO fallback)" : ""} — waiting for confirmation (${1}/${CONFIRM_REQUIRED}).`,
-    );
+  if (!confirmationTracker.confirm(channel, hash)) {
+    // Only the first sighting is worth logging — later ticks in the same
+    // confirmation window are silent (they used to be silent too).
+    if (confirmationTracker.count(channel) === 1) {
+      logger.info(
+        `${channel}: new hash ${hash} seen${isFallback ? " (WEAO fallback)" : ""} — waiting for confirmation (1/${CONFIRM_REQUIRED}).`,
+      );
+    }
     return true;
   }
-  if (pending.count + 1 < CONFIRM_REQUIRED) {
-    pending.count += 1;
-    pendingConfirmation.set(channel, pending);
-    return true;
-  }
-  pendingConfirmation.delete(channel);
 
   // Layer 2 — fallback trust: a fallback hash that is already known (or is
   // exactly the previous version) is stale lag, not a revert. Ignore it
