@@ -138,3 +138,7 @@ npm run pm2:start
   touch your real `data.db`.
 - CI (`.github/workflows/build.yml`) runs `npm run build`, `npm run typecheck`,
   and `npm test` on Node 20 and 22 for every push and pull request.
+- Discord-facing behaviour (gateway events, permissions, embeds, the captcha
+  flow) is not covered by the unit tests. Use
+  [`docs/test-guild-checklist.md`](docs/test-guild-checklist.md) before a
+  release.
