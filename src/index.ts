@@ -1,6 +1,6 @@
 import { client } from "./lib/client";
 import logger from "./lib/logger";
-import config from "./lib/config";
+import config, { assertConfig } from "./lib/config";
 import { initErrorHandler, reportError } from "./lib/errorReporter";
 import { loadCommands } from "./commands";
 import { loadEvents } from "./events";
@@ -72,7 +72,7 @@ async function loginWithRetry() {
   let attempt = 0;
   for (;;) {
     try {
-      await client.login(config.DISCORD_BOT_TOKEN);
+      await client.login(config.DISCORD_BOT_TOKEN!);
       return;
     } catch (error: any) {
       attempt++;
@@ -88,6 +88,10 @@ async function loginWithRetry() {
 }
 
 async function start() {
+  // Fail fast and loudly on a missing token/id — but only here, at real
+  // startup, never on module import (see src/lib/config.ts).
+  assertConfig();
+
   // Attach the bot's own error/warn/rate-limit event handlers (webhook
   // notifications are throttled + coalesced by the reporter).
   initErrorHandler(client);

@@ -2,10 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-type Command = {
+export type Command = {
   data: {
     name: string;
+    toJSON?: () => unknown;
   };
+  cooldownMs?: number;
   execute: (...args: any[]) => any;
   autocomplete?: (...args: any[]) => any;
 };

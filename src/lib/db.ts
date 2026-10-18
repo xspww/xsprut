@@ -2,7 +2,22 @@ import Database from "better-sqlite3";
 import path from "path";
 import logger from "./logger";
 
-const db = new Database(path.join(__dirname, "../../data.db"));
+// DB_PATH lets tests (and alternate deployments) point at another file without
+// touching the default. Relative paths resolve against the project root.
+//
+// Under the Node test runner each test file runs in its own child process, so
+// an in-memory database keeps tests hermetic (no shared data.db, no WAL lock
+// contention between parallel files). Real runs are unaffected.
+const explicitPath = process.env.DB_PATH?.trim();
+const dbFile = explicitPath
+  ? explicitPath === ":memory:"
+    ? ":memory:"
+    : path.resolve(explicitPath)
+  : process.env.NODE_TEST_CONTEXT
+    ? ":memory:"
+    : path.join(__dirname, "../../data.db");
+
+const db = new Database(dbFile);
 
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
@@ -530,14 +545,14 @@ try {
 // reuse, and this removes the native allocation/parse cost per call.
 const statementCache = new Map<string, import("better-sqlite3").Statement>();
 const originalPrepare = db.prepare.bind(db);
-(db as any).prepare = (sql: string) => {
+db.prepare = ((sql: string) => {
   let stmt = statementCache.get(sql);
   if (!stmt) {
     stmt = originalPrepare(sql);
     statementCache.set(sql, stmt);
   }
   return stmt;
-};
+}) as unknown as typeof db.prepare;
 
 export default db;
 
