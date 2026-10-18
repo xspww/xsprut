@@ -104,7 +104,37 @@ Both commands share the same per-user cooldown as slash commands.
 | --- | --- |
 | `npm run dev` | Watch mode for local development |
 | `npm run build` | Compile TypeScript to `dist/` |
+| `npm run typecheck` | Type-check source and tests without emitting |
 | `npm start` | Run the compiled bot |
 | `npm run register-commands` | Register slash commands with Discord |
 | `npm test` | Run the test suite |
+| `npm run refresh-cards` | Force-refresh every enabled Embed Status card once |
 | `npm run pm2:start` | Run under PM2 for always-on hosting |
+
+## Hosting with PM2
+
+`npm run pm2:start` reads `ecosystem.config.js`, which is **not** committed
+(it holds machine-specific settings). Create it once:
+
+```bash
+# Windows
+copy ecosystem.config.example.js ecosystem.config.js
+
+# macOS / Linux
+cp ecosystem.config.example.js ecosystem.config.js
+```
+
+Edit the copy if you need a different app name or log path, then run:
+
+```bash
+npm run build
+npm run pm2:start
+```
+
+## Development
+
+- `npm test` runs the suite with Node's built-in test runner via `tsx`
+  (`tests/*.test.ts`). Tests use an in-memory SQLite database, so they never
+  touch your real `data.db`.
+- CI (`.github/workflows/build.yml`) runs `npm run build`, `npm run typecheck`,
+  and `npm test` on Node 20 and 22 for every push and pull request.

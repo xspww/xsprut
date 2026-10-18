@@ -1,20 +1,31 @@
 {
   "name": "robloxupdatetracker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Discord bot that tracks Roblox client updates and executor releases.",
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "clean": "node -e \"const fs=require('fs');const w=new Int32Array(new SharedArrayBuffer(4));for(let a=1;;a++){try{fs.rmSync('dist',{recursive:true,force:true});break}catch(e){if(a>=6)throw e;console.error('dist is locked ('+e.code+'), retry '+a+'/5');Atomics.wait(w,0,0,400*a)}}\"",
     "build": "npm run clean && tsc && node -e \"console.log('Build completed successfully.')\"",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "start": "node dist/index.js",
     "pm2:start": "pm2 startOrReload ecosystem.config.js",
     "dev": "tsx watch src/index.ts",
     "test": "tsx --test tests/*.test.ts",
-    "register-commands": "tsx src/lib/registerCommands.ts",
-    "refresh-cards": "tsx scripts/refreshCards.ts"
+    "register-commands": "tsx src/scripts/registerCommands.ts",
+    "refresh-cards": "tsx src/scripts/refreshCards.ts"
   },
-  "keywords": [],
-  "type": "commonjs",
+  "keywords": [
+    "discord",
+    "discord-bot",
+    "roblox",
+    "update-tracker",
+    "discord.js"
+  ],
+  "license": "MIT",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.1",
