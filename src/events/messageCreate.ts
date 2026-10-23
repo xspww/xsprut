@@ -202,6 +202,11 @@ export async function execute(message: Message) {
           const invite = await (message.channel as any).createInvite({
             maxAge: 30 * 60, // Expire after 30 minutes (in seconds)
             maxUses: 1, // Maximum number of uses: 1
+            // Discord reuses a matching invite by default. That invite may
+            // already have a code (even a consumed one), which would make
+            // createInviteVerificationCode throw. Force a fresh invite so the
+            // new code is bound to a new invite.
+            unique: true,
           });
 
           // In Code mode the link alone is not enough: the inviter must send
