@@ -214,7 +214,7 @@ export function createExecutorUpdateContainer(opts: {
       banwaveRow,
   );
 
-  const footerText = new TextDisplayBuilder().setContent("Powered by Diff Team");
+  const footerText = new TextDisplayBuilder().setContent("Powered by WEAO");
 
   const container = new ContainerBuilder().setAccentColor(0x22c55e);
 

@@ -153,6 +153,13 @@ function chunkLines(name: string, lines: string[]): { name: string; value: strin
   return fields;
 }
 
+/** Trims a description so each help line stays compact and readable. */
+function shortDesc(desc: string, max = 72): string {
+  const clean = (desc ?? "—").trim();
+  if (clean.length <= max) return clean;
+  return clean.slice(0, max - 1).trimEnd() + "…";
+}
+
 export async function execute(interaction: ChatInputCommandInteraction) {
   try {
     const descMap = buildDescriptionMap();
@@ -164,10 +171,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       const lines: string[] = [];
       for (const path of group.entries) {
         coveredPaths.add(path);
-        const desc = descMap.get(path) ?? "—";
-        lines.push(`\`${path}\` — ${desc}`);
+        const desc = shortDesc(descMap.get(path) ?? "—");
+        lines.push(`\`${path}\`  ${desc}`);
       }
-      fields.push(...chunkLines(`${group.emoji} ${group.name}`, lines));
+      const groupName = `${group.emoji}  ${group.name}  ·  ${group.entries.length}`;
+      fields.push(...chunkLines(groupName, lines));
     }
 
     // Future-proofing: any registered command not curated above shows up in "Other".
@@ -177,18 +185,30 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (uncategorized.length > 0) {
       fields.push(
         ...chunkLines(
-          "➕ Additional",
-          uncategorized.map((path) => `\`${path}\` — ${descMap.get(path)}`),
+          `➕  Additional  ·  ${uncategorized.length}`,
+          uncategorized.map((path) => `\`${path}\`  ${shortDesc(descMap.get(path) ?? "—")}`),
         ),
       );
     }
 
+    const avatarUrl = interaction.client.user?.displayAvatarURL() ?? undefined;
+    const totalCommands = descMap.size;
+
     const embed = new EmbedBuilder()
-      .setTitle("Diff Team — Commands and usage")
-      .setDescription("Run a command and pick options as shown (required options must be filled in)\nAll commands require **Administrator** permission")
+      .setColor(0x5865f2)
+      .setTitle("📖  Command Reference")
+      .setDescription(
+        "All available commands, grouped by category.\n" +
+          "• Required options must be filled in when running a command.\n" +
+          "• Every command requires **Administrator** permission.",
+      )
+      .setThumbnail(avatarUrl ?? null)
       .addFields(fields)
-      .setColor(0x3b82f6)
-      .setFooter({ text: "Diff Team" });
+      .setFooter({
+        text: `Made by xspww  •  ${totalCommands} commands`,
+        iconURL: avatarUrl,
+      })
+      .setTimestamp();
 
     return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   } catch (error) {

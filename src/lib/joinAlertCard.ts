@@ -26,7 +26,7 @@ export function createJoinAlertContainer(opts: {
       `• Account created: <t:${opts.accountCreatedUnix}:R>\n` +
       `• Joined: <t:${nowUnix}:F>`,
   );
-  const footerText = new TextDisplayBuilder().setContent("Powered by Diff Team");
+  const footerText = new TextDisplayBuilder().setContent("Powered by WEAO");
 
   return new ContainerBuilder()
     .setAccentColor(0xef4444)
