@@ -1,4 +1,12 @@
-import { Events, Message, PermissionFlagsBits } from "discord.js";
+import {
+  ContainerBuilder,
+  Events,
+  Message,
+  MessageFlags,
+  PermissionFlagsBits,
+  SeparatorBuilder,
+  TextDisplayBuilder,
+} from "discord.js";
 import db from "../lib/db";
 import logger from "../lib/logger";
 import config from "../lib/config";
@@ -199,7 +207,7 @@ export async function execute(message: Message) {
           // In Code mode the link alone is not enough: the inviter must send
           // the single-use code too. If code creation fails, revoke the invite
           // so the new member cannot slip in unverified.
-          let codeBlock = "";
+          let verificationCode: string | null = null;
           if (verification?.verificationMode === "code") {
             try {
               const { code } = createInviteVerificationCode({
@@ -208,9 +216,7 @@ export async function execute(message: Message) {
                 inviterId: message.author.id,
                 inviteCode: invite.code,
               });
-              codeBlock =
-                `\n🔑 Verification code: \`${code}\`\n` +
-                `_Send this code privately with the invite. It was created for this invite, is valid for **30 minutes**, and works **once**._`;
+              verificationCode = code;
             } catch (codeError) {
               try {
                 await invite.delete("Could not create a verification code");
@@ -221,9 +227,34 @@ export async function execute(message: Message) {
             }
           }
 
-          const reply = await message.reply(
-            `🔗 Invite link: ${invite.url}${codeBlock}\n⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`
+          // Components v2 has no legacy `content` field, so the code can use
+          // headings and stand out instead of being buried in a text line.
+          const container = new ContainerBuilder().setAccentColor(0x22c55e);
+          container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`**🔗 Invite link**\n${invite.url}`),
           );
+
+          if (verificationCode) {
+            container
+              .addSeparatorComponents(new SeparatorBuilder())
+              .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent("## 🔑 Verification code"),
+                new TextDisplayBuilder().setContent(`# \`${verificationCode}\``),
+              );
+          }
+
+          container
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(
+              new TextDisplayBuilder().setContent(
+                `⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`,
+              ),
+            );
+
+          const reply = await message.reply({
+            components: [container],
+            flags: MessageFlags.IsComponentsV2,
+          });
           // Auto-delete the reply AND the command message after 30s so the
           // invite link doesn't linger in chat. Deleting another user's
           // message needs Manage Messages — if that fails it's best-effort.
