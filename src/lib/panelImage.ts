@@ -205,7 +205,7 @@ export function resolvePanelImageInput(
 
   const trimmed = imageUrl?.trim() ?? "";
   if (!trimmed) return { image: null };
-  if (trimmed.length > PANEL_IMAGE_URL_MAX_LENGTH || !/^https?:\/\/\S+$/i.test(trimmed)) {
+  if (trimmed.length > PANEL_IMAGE_URL_MAX_LENGTH || !/^https:\/\/\S+$/i.test(trimmed)) {
     return {
       image: null,
       error: "❌ `banner_url` must be a direct https link to an image (e.g. https://example.com/banner.png)",

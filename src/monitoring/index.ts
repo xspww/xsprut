@@ -135,12 +135,15 @@ const REVERT_COOLDOWN_MS = 30 * 60 * 1000;
 const confirmationTracker = new ConfirmationTracker(CONFIRM_REQUIRED);
 const lastRevertAlertAt = new Map<string, number>();
 
-/** Test hook — clears in-memory confirmation + cooldown state. */
+/** Test hook — clears all in-memory monitoring state. */
 export function __resetMonitoringState() {
   confirmationTracker.reset();
   lastRevertAlertAt.clear();
   missingChannels.clear();
   weaoFallbackActive = false;
+  missStreak.clear();
+  slowUntil.clear();
+  lastNoHashLogAt.clear();
 }
 
 // Returns true when a hash was obtained (detection ran), false when the

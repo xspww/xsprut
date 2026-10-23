@@ -185,14 +185,15 @@ const stmtGetExecutorAlertsGuild = db.prepare(
    WHERE LOWER(executorName) = ? AND enabled = 1 AND guildId = ?`,
 );
 
-/** List executor-alert channels for a normalized executor name. */
+/** List executor-alert channels for an executor name (normalized to lowercase). */
 export function getExecutorAlerts(searchName: string, guildId?: string): ExecutorAlertRow[] {
-  const key = guildId ? `${searchName}|${guildId}` : searchName;
+  const normalized = searchName.trim().toLowerCase();
+  const key = guildId ? `${normalized}|${guildId}` : normalized;
   let rows = executorAlertsCache.get(key);
   if (rows === undefined) {
     rows = (guildId
-      ? stmtGetExecutorAlertsGuild.all(searchName, guildId)
-      : stmtGetExecutorAlerts.all(searchName)) as ExecutorAlertRow[];
+      ? stmtGetExecutorAlertsGuild.all(normalized, guildId)
+      : stmtGetExecutorAlerts.all(normalized)) as ExecutorAlertRow[];
     executorAlertsCache.set(key, rows);
   }
   return rows;

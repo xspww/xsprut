@@ -662,8 +662,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
       if (existingChannel) {
         db.prepare(
-          `INSERT INTO botVoiceChannels (guildId, categoryId, voiceChannelId, mode, displayName, robloxChannel, enabled, omitPrefix, updatedAt)
-           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+          `INSERT INTO botVoiceChannels (guildId, categoryId, voiceChannelId, mode, displayName, robloxChannel, enabled, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?)
            ON CONFLICT(guildId) DO UPDATE SET
              categoryId = excluded.categoryId,
              mode = excluded.mode,
@@ -671,7 +671,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
              robloxChannel = excluded.robloxChannel,
              voiceChannelId = excluded.voiceChannelId,
              enabled = 1,
-             omitPrefix = excluded.omitPrefix,
              updatedAt = excluded.updatedAt`,
         ).run(
           interaction.guildId,
@@ -680,7 +679,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           mode,
           displayName,
           robloxChannel,
-          1,
           Date.now(),
         );
 
@@ -691,8 +689,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       }
 
       db.prepare(
-        `INSERT INTO botVoiceChannels (guildId, categoryId, voiceChannelId, mode, displayName, robloxChannel, enabled, omitPrefix, updatedAt)
-         VALUES (?, ?, NULL, ?, ?, ?, 1, ?, ?)
+        `INSERT INTO botVoiceChannels (guildId, categoryId, voiceChannelId, mode, displayName, robloxChannel, enabled, updatedAt)
+         VALUES (?, ?, NULL, ?, ?, ?, 1, ?)
          ON CONFLICT(guildId) DO UPDATE SET
            categoryId = excluded.categoryId,
            mode = excluded.mode,
@@ -700,9 +698,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
            robloxChannel = excluded.robloxChannel,
            voiceChannelId = NULL,
            enabled = 1,
-           omitPrefix = excluded.omitPrefix,
            updatedAt = excluded.updatedAt`,
-      ).run(interaction.guildId, category!.id, mode, displayName, robloxChannel, 1, Date.now());
+      ).run(interaction.guildId, category!.id, mode, displayName, robloxChannel, Date.now());
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await updateBotVoiceChannels();
@@ -777,8 +774,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       const channelId = existingChannel ? existingChannel.id : null;
 
       db.prepare(
-        `INSERT INTO botChatChannels (guildId, categoryId, channelId, mode, displayName, robloxChannel, enabled, omitPrefix, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?)
+        `INSERT INTO botChatChannels (guildId, categoryId, channelId, mode, displayName, robloxChannel, enabled, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?)
          ON CONFLICT(guildId) DO UPDATE SET
            categoryId = excluded.categoryId,
            mode = excluded.mode,
@@ -786,7 +783,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
            robloxChannel = excluded.robloxChannel,
            channelId = excluded.channelId,
            enabled = 1,
-           omitPrefix = excluded.omitPrefix,
            updatedAt = excluded.updatedAt`,
       ).run(interaction.guildId, categoryId, channelId, mode, displayName, robloxChannel, Date.now());
 

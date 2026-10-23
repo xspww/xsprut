@@ -29,10 +29,11 @@ process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception:", error);
   reportError("Uncaught exception", error);
   const now = Date.now();
+  // Count exceptions inside the 10s window; reset to 1 outside it.
   if (now - lastUncaughtAt < 10_000) {
-    uncaughtBurst++;
+    uncaughtBurst += 1;
   } else {
-    uncaughtBurst = 0;
+    uncaughtBurst = 1;
   }
   lastUncaughtAt = now;
   if (uncaughtBurst >= 3) {

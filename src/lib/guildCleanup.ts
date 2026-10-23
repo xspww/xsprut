@@ -5,8 +5,8 @@ import logger from "./logger";
 import { clearDbCaches } from "./dbCache";
 
 // Every per-guild table and its guild column. Global tables (botStatus,
-// knownVersions, channelState, executorLastState) and messageLog (keyed by
-// channelId only) are intentionally excluded.
+// knownVersions, channelState, executorLastState) are intentionally excluded.
+// messageLog is guild-scoped now, so kicked guilds' logs are cleaned too.
 export const GUILD_TABLES: { table: string; guildColumn: string }[] = [
   { table: "alerts", guildColumn: "guildId" },
   { table: "executorStatusChannels", guildColumn: "guildId" },
@@ -19,13 +19,16 @@ export const GUILD_TABLES: { table: string; guildColumn: string }[] = [
   { table: "protectedRooms", guildColumn: "guildId" },
   { table: "verificationConfig", guildColumn: "guildId" },
   { table: "allowedBots", guildColumn: "guildId" },
+  { table: "messageLog", guildColumn: "guildId" },
 ];
 
 export function collectGuildsWithData(dbase = db): Set<string> {
   const guilds = new Set<string>();
   for (const { table, guildColumn } of GUILD_TABLES) {
-    const rows = dbase.prepare(`SELECT DISTINCT ${guildColumn} AS gid FROM ${table}`).all() as { gid: string }[];
-    for (const row of rows) guilds.add(row.gid);
+    const rows = dbase.prepare(`SELECT DISTINCT ${guildColumn} AS gid FROM ${table}`).all() as { gid: string | null }[];
+    for (const row of rows) {
+      if (row.gid) guilds.add(row.gid);
+    }
   }
   return guilds;
 }
