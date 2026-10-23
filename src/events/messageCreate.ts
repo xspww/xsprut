@@ -4,6 +4,7 @@ import logger from "../lib/logger";
 import config from "../lib/config";
 import { checkCooldown } from "../lib/cooldown";
 import { getProtectedRoom, invalidateProtectedRoom } from "../lib/dbCache";
+import { getVerificationConfig, createInviteVerificationCode } from "../lib/verifyManager";
 import { ROBLOX_CHANNELS } from "../lib/constants";
 import { getRobloxVersion } from "../lib/robloxVersion";
 import {
@@ -165,12 +166,63 @@ export async function execute(message: Message) {
             return;
           }
 
+          const verification = getVerificationConfig(message.guildId!);
+
+          // In Code mode only members who already passed verification (or
+          // admins/the owner) may mint an invite + code. Otherwise an
+          // unverified member could generate a code for themselves and bypass
+          // the gate entirely.
+          if (verification?.verificationMode === "code") {
+            // Fetch instead of trusting the cache: a stale member object could
+            // still list the verified role after staff removed it.
+            const member =
+              (await message.guild.members.fetch(message.author.id).catch(() => null)) ??
+              message.member;
+            const canInvite =
+              message.guild.ownerId === message.author.id ||
+              member?.permissions.has(PermissionFlagsBits.Administrator) === true ||
+              member?.roles.cache.has(verification.verifiedRoleId) === true;
+
+            if (!canInvite) {
+              await message.reply(
+                "❌ Only verified members can create an invite and verification code",
+              );
+              return;
+            }
+          }
+
           const invite = await (message.channel as any).createInvite({
             maxAge: 30 * 60, // Expire after 30 minutes (in seconds)
             maxUses: 1, // Maximum number of uses: 1
           });
+
+          // In Code mode the link alone is not enough: the inviter must send
+          // the single-use code too. If code creation fails, revoke the invite
+          // so the new member cannot slip in unverified.
+          let codeBlock = "";
+          if (verification?.verificationMode === "code") {
+            try {
+              const { code } = createInviteVerificationCode({
+                guildId: message.guildId!,
+                channelId: message.channelId,
+                inviterId: message.author.id,
+                inviteCode: invite.code,
+              });
+              codeBlock =
+                `\n🔑 Verification code: \`${code}\`\n` +
+                `_Send this code privately with the invite. It was created for this invite, is valid for **30 minutes**, and works **once**._`;
+            } catch (codeError) {
+              try {
+                await invite.delete("Could not create a verification code");
+              } catch {
+                // Best-effort: the invite still expires on its own.
+              }
+              throw codeError;
+            }
+          }
+
           const reply = await message.reply(
-            `🔗 Invite link: ${invite.url}\n⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`
+            `🔗 Invite link: ${invite.url}${codeBlock}\n⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`
           );
           // Auto-delete the reply AND the command message after 30s so the
           // invite link doesn't linger in chat. Deleting another user's

@@ -61,15 +61,26 @@ Set the action to **Timeout** first so a mistake is recoverable.
 - [ ] An **Administrator** posting there is skipped (logged as `Skipped protection`)
 - [ ] Switch to action = Ban only after the timeout path is confirmed
 
-## Join verification + captcha
+## Join verification — captcha mode
 
-- [ ] `/verify setup` with verified/unverified roles → the panel is posted
+- [ ] `/verify setup` with verified/unverified roles and `mode: Captcha` → the panel is posted
 - [ ] Press **Verify** → captcha image renders (not plain text)
 - [ ] Enter the **correct** code → roles swap, success message shows
 - [ ] Press **Verify** again and enter a **wrong** code 3 times → third attempt
       replies `Too many incorrect attempts`, and the session is gone
 - [ ] Start over and wait > 3 minutes → the code is reported as expired
-- [ ] `/verify remove` disables it
+
+## Join verification — code mode
+
+- [ ] `/verify setup` with verified/unverified roles and `mode: Code` → the panel is posted
+- [ ] As a **verified** member, `?inv` → the reply contains both the invite link and a `XXXX-XXX-XXXX` code
+- [ ] As an **unverified** member, `?inv` → replied `Only verified members` (no invite/code)
+- [ ] Press **Enter code** → the modal opens (no captcha image)
+- [ ] Enter the **correct** code → roles swap, success message shows
+- [ ] Reuse the same code → replied `already been used`
+- [ ] Enter a **made-up** code, or a code generated in another server → invalid
+- [ ] Wait > 30 minutes, then enter the code → replied `expired` (or `Invalid or expired`)
+- [ ] Switch back to Captcha mode or `/verify remove` → old codes stop working
 
 ## Join alerts and cleanup
 

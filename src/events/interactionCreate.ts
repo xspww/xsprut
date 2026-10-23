@@ -13,6 +13,7 @@ import {
   TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
+  type Guild,
 } from "discord.js";
 import { client } from "../lib/client";
 import logger from "../lib/logger";
@@ -23,10 +24,46 @@ import {
   createCaptchaSession,
   validateCaptchaSession,
   getVerificationConfig,
+  validateInviteCode,
+  consumeInviteCode,
+  releaseInviteCode,
+  type VerificationConfig,
 } from "../lib/verifyManager";
 import { renderCaptchaImage } from "../lib/captchaImage";
 
 export const name = Events.InteractionCreate;
+
+/** Modal shown in Code mode. One field: the code from the invite. */
+function buildInviteCodeModal(): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId("verify_code_modal_submit")
+    .setTitle("Enter Verification Code")
+    .addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId("invite_code_input")
+          .setLabel("Code from your invite")
+          .setStyle(TextInputStyle.Short)
+          .setMinLength(11)
+          .setMaxLength(16)
+          .setPlaceholder("XXXX-XXX-XXXX")
+          .setRequired(true),
+      ),
+    );
+}
+
+/** Shared role swap for both verification modes. */
+async function grantVerifiedRole(
+  guild: Guild,
+  userId: string,
+  cfg: VerificationConfig,
+): Promise<void> {
+  const member = await guild.members.fetch(userId);
+  await member.roles.add(cfg.verifiedRoleId, "Verification passed");
+  if (cfg.unverifiedRoleId) {
+    await member.roles.remove(cfg.unverifiedRoleId, "Verification passed").catch(() => {});
+  }
+}
 
 export async function execute(interaction: Interaction) {
   // ─── Slash Commands ────────────────────────────────────────────────────────
@@ -143,6 +180,12 @@ export async function execute(interaction: Interaction) {
           return interaction.reply({ content: "❌ Verification is not set up in this server", flags: MessageFlags.Ephemeral });
         }
 
+        // Code mode: the invited user enters the code that came with their
+        // invite. No image captcha is generated in this mode.
+        if (cfg.verificationMode === "code") {
+          return interaction.showModal(buildInviteCodeModal());
+        }
+
         const code = createCaptchaSession(user.id);
 
         // Components v2 captcha card — the code is rendered as an image
@@ -207,57 +250,122 @@ export async function execute(interaction: Interaction) {
 
   // ─── Modal Submissions ─────────────────────────────────────────────────────
   } else if (interaction.isModalSubmit()) {
-    if (interaction.customId !== "verify_modal_submit") return;
+    // ── Captcha mode ────────────────────────────────────────────────────────
+    if (interaction.customId === "verify_modal_submit") {
+      const { user, guildId, guild } = interaction;
+      if (!guildId || !guild) {
+        return interaction.reply({ content: "❌ This can only be used in a server", flags: MessageFlags.Ephemeral });
+      }
 
-    const { user, guildId, guild } = interaction;
-    if (!guildId || !guild) {
-      return interaction.reply({ content: "❌ This can only be used in a server", flags: MessageFlags.Ephemeral });
-    }
+      const cfg = getVerificationConfig(guildId);
+      if (!cfg) {
+        return interaction.reply({ content: "❌ Verification is not set up in this server", flags: MessageFlags.Ephemeral });
+      }
+      if (cfg.verificationMode !== "captcha") {
+        return interaction.reply({ content: "❌ Captcha verification is not enabled in this server", flags: MessageFlags.Ephemeral });
+      }
 
-    const cfg = getVerificationConfig(guildId);
-    if (!cfg) {
-      return interaction.reply({ content: "❌ Verification is not set up in this server", flags: MessageFlags.Ephemeral });
-    }
+      const inputCode = interaction.fields.getTextInputValue("captcha_input").trim();
+      const result = validateCaptchaSession(user.id, inputCode);
 
-    const inputCode = interaction.fields.getTextInputValue("captcha_input").trim();
-    const result = validateCaptchaSession(user.id, inputCode);
+      if (result === "expired") {
+        return interaction.reply({ content: "⏰ The code has expired. Please press **Verify** again", flags: MessageFlags.Ephemeral });
+      }
+      if (result === "not_found") {
+        return interaction.reply({ content: "❓ Session not found. Please press **Verify** again", flags: MessageFlags.Ephemeral });
+      }
+      if (result === "wrong") {
+        return interaction.reply({ content: "❌ Incorrect code. Please press **Verify** again", flags: MessageFlags.Ephemeral });
+      }
+      if (result === "locked") {
+        return interaction.reply({
+          content: "🚫 Too many incorrect attempts. Please press **Verify** to get a new code",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
 
-    if (result === "expired") {
-      return interaction.reply({ content: "⏰ The code has expired. Please press **Verify** again", flags: MessageFlags.Ephemeral });
-    }
-    if (result === "not_found") {
-      return interaction.reply({ content: "❓ Session not found. Please press **Verify** again", flags: MessageFlags.Ephemeral });
-    }
-    if (result === "wrong") {
-      return interaction.reply({ content: "❌ Incorrect code. Please press **Verify** again", flags: MessageFlags.Ephemeral });
-    }
-    if (result === "locked") {
-      return interaction.reply({
-        content: "🚫 Too many incorrect attempts. Please press **Verify** to get a new code",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+      // ✅ Correct! Acknowledge before the role REST calls so a slow fetch /
+      // rate-limited role update cannot blow Discord's 3-second window.
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // ✅ Correct! Grant/remove roles
-    try {
-      const member = await guild.members.fetch(user.id);
-
-      // Give verified role
-      await member.roles.add(cfg.verifiedRoleId, "Captcha verification passed");
-
-      // Remove unverified role if configured
-      if (cfg.unverifiedRoleId) {
-        await member.roles.remove(cfg.unverifiedRoleId, "Captcha verification passed").catch(() => {});
+      try {
+        await grantVerifiedRole(guild, user.id, cfg);
+      } catch (err) {
+        logger.error(`Failed to assign verified role to ${user.id}:`, err);
+        return interaction.editReply({
+          content: "❌ Failed to assign the role. Please contact an admin",
+        });
       }
 
       const successMsg = cfg.successMessage.replace("{server}", guild.name);
-      return interaction.reply({ content: `✅ ${successMsg}`, flags: MessageFlags.Ephemeral });
-    } catch (err) {
-      logger.error(`Failed to assign verified role to ${user.id}:`, err);
-      return interaction.reply({
-        content: "❌ Failed to assign the role. Please contact an admin",
-        flags: MessageFlags.Ephemeral,
-      });
+      return interaction.editReply({ content: `✅ ${successMsg}` });
+    }
+
+    // ── Code mode (invite-bound code) ───────────────────────────────────────
+    if (interaction.customId === "verify_code_modal_submit") {
+      const { user, guildId, guild } = interaction;
+      if (!guildId || !guild) {
+        return interaction.reply({ content: "❌ This can only be used in a server", flags: MessageFlags.Ephemeral });
+      }
+
+      const cfg = getVerificationConfig(guildId);
+      if (!cfg) {
+        return interaction.reply({ content: "❌ Verification is not set up in this server", flags: MessageFlags.Ephemeral });
+      }
+      if (cfg.verificationMode !== "code") {
+        return interaction.reply({ content: "❌ Code verification is not enabled in this server", flags: MessageFlags.Ephemeral });
+      }
+
+      const inputCode = interaction.fields.getTextInputValue("invite_code_input").trim();
+      const validation = validateInviteCode(guildId, inputCode);
+
+      if (validation.status === "expired") {
+        return interaction.reply({
+          content: "⏰ This code has expired. Ask the member who invited you for a new invite and code.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (validation.status === "used") {
+        return interaction.reply({
+          content: "🚫 This code has already been used. Each invite code works only once.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (validation.status !== "correct") {
+        return interaction.reply({
+          content: "❌ Invalid or expired code. Check the `XXXX-XXX-XXXX` code that came with your invite.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      // Acknowledge before consuming / role REST calls so a slow fetch or a
+      // rate-limited role update cannot blow Discord's 3-second window.
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      // Consume before granting the role so two people cannot race the same
+      // code. If Discord rejects the role change, release it again.
+      const consumed = consumeInviteCode(validation.record.codeHash, user.id);
+      if (!consumed) {
+        return interaction.editReply({
+          content: "🚫 This code is no longer valid. It may have expired or already been used.",
+        });
+      }
+
+      try {
+        await grantVerifiedRole(guild, user.id, cfg);
+      } catch (err) {
+        // Only release when the role grant itself failed. If the success
+        // reply below fails, the role was already granted — releasing would
+        // make the one-time code reusable.
+        releaseInviteCode(validation.record.codeHash, user.id);
+        logger.error(`Failed to assign verified role to ${user.id} (code mode):`, err);
+        return interaction.editReply({
+          content: "❌ Failed to assign the role. Please contact an admin",
+        });
+      }
+
+      const successMsg = cfg.successMessage.replace("{server}", guild.name);
+      return interaction.editReply({ content: `✅ ${successMsg}` });
     }
   }
 }

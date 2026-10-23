@@ -189,9 +189,28 @@ CREATE TABLE IF NOT EXISTS verificationConfig (
     embedDescription TEXT NOT NULL DEFAULT 'Click the button below and solve the short captcha to unlock the server.',
     successMessage TEXT NOT NULL DEFAULT 'You''re verified. Welcome to {server}!',
     imageUrl TEXT,
+    verificationMode TEXT NOT NULL DEFAULT 'captcha',
     enabled BOOLEAN NOT NULL DEFAULT 1,
     createdAt INTEGER NOT NULL
 );
+
+-- One verification code per temporary invite (see ?inv). The plaintext code
+-- is never stored: only its SHA-256 hash, so a leaked data.db cannot be used to
+-- verify. Codes are guild-scoped, expire with the invite, and are single-use.
+CREATE TABLE IF NOT EXISTS inviteVerificationCodes (
+    codeHash TEXT PRIMARY KEY,
+    guildId TEXT NOT NULL,
+    channelId TEXT NOT NULL,
+    inviterId TEXT NOT NULL,
+    inviteCode TEXT NOT NULL UNIQUE,
+    createdAt INTEGER NOT NULL,
+    expiresAt INTEGER NOT NULL,
+    usedBy TEXT,
+    usedAt INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_inviteVerificationCodes_expiry
+ON inviteVerificationCodes (expiresAt);
 
 CREATE TABLE IF NOT EXISTS allowedBots (
     guildId TEXT NOT NULL,
@@ -521,6 +540,21 @@ for (const table of ["protectedRooms", "verificationConfig"] as const) {
     } catch (e) {
       logger.error(`Failed to migrate ${table} (imageUrl):`, e);
     }
+  }
+}
+
+// Verification mode: "captcha" (legacy default) or "code" (invite + code).
+// Existing rows keep working as captcha panels after the upgrade.
+const verificationModeExists = db
+  .prepare(`SELECT 1 FROM pragma_table_info('verificationConfig') WHERE name = 'verificationMode'`)
+  .get();
+
+if (!verificationModeExists) {
+  try {
+    db.exec(`ALTER TABLE verificationConfig ADD COLUMN verificationMode TEXT NOT NULL DEFAULT 'captcha';`);
+    logger.info("Added verificationMode column to verificationConfig");
+  } catch (e) {
+    logger.error("Failed to migrate verificationConfig (verificationMode):", e);
   }
 }
 

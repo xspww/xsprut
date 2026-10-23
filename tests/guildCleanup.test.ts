@@ -52,4 +52,20 @@ describe("deleteGuildData", () => {
       0,
     );
   });
+
+  it("wipes invite verification codes for kicked guilds", () => {
+    const m = seedDb();
+    m.prepare("INSERT INTO inviteVerificationCodes (guildId) VALUES ('gone')").run();
+
+    deleteGuildData(["gone"], m);
+
+    assert.equal(
+      (
+        m.prepare("SELECT COUNT(*) c FROM inviteVerificationCodes").get() as {
+          c: number;
+        }
+      ).c,
+      0,
+    );
+  });
 });

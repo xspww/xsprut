@@ -88,15 +88,32 @@ All commands require the **Administrator** permission. Run `/help` in Discord fo
 ### Prefix commands (no slash needed)
 
 Anyone can use these in normal text channels by typing them directly.
-They never work in a protected room.
+They never work in a protected room. In **Code** verification mode, `?inv`
+additionally requires the verified role, Administrator, or server ownership.
 
 | Command | Action |
 | --- | --- |
 | `?ver` / `?ver ZBeta` | Show the current Roblox version (cached 30s, WEAO fallback for LIVE) |
-| `?inv` | Create a 1-use invite link for the channel (expires in 30 min, auto-deleted after 30s) |
+| `?inv` | Create a 1-use invite link for the channel (expires in 30 min, auto-deleted after 30s). In **Code** verification mode the reply also contains one single-use `XXXX-XXX-XXXX` code created for that invite. |
 
 `?inv` needs the bot to have the `Create Instant Invite` permission.
 Both commands share the same per-user cooldown as slash commands.
+
+### Verification modes
+
+`/verify setup` supports two modes, selected with the required `mode` option:
+
+- **Captcha** — the user presses **Verify** and solves a 4-digit image captcha.
+- **Code** — the user presses **Enter code** and submits the code that came with
+  their invite. In this mode `?inv` creates exactly one cryptographically random
+  code per invite; the code is created for that invite, expires after 30 minutes,
+  and works once. Treat it as a one-time voucher: anyone who has the code can
+  redeem it, so send it only to the invited user. Only members who already have
+  the verified role (or admins/server owner) can create an invite + code in this
+  mode, so an unverified user cannot generate a code for themselves.
+  Because `?inv` is a prefix command, its reply (including the code) is visible
+  in that channel for 30 seconds — run it where only trusted members can read,
+  and forward the code privately.
 
 ## Scripts
 

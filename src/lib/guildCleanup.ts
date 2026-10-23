@@ -18,6 +18,7 @@ export const GUILD_TABLES: { table: string; guildColumn: string }[] = [
   { table: "memberJoinAlerts", guildColumn: "guildId" },
   { table: "protectedRooms", guildColumn: "guildId" },
   { table: "verificationConfig", guildColumn: "guildId" },
+  { table: "inviteVerificationCodes", guildColumn: "guildId" },
   { table: "allowedBots", guildColumn: "guildId" },
   { table: "messageLog", guildColumn: "guildId" },
 ];

@@ -17,6 +17,8 @@ import {
   getVerificationConfig,
   saveVerificationConfig,
   disableVerificationConfig,
+  deleteInviteCodesForGuild,
+  type VerificationMode,
 } from "../lib/verifyManager";
 import {
   deleteLocalPanelImage,
@@ -28,7 +30,7 @@ import {
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
-  .setDescription("✅ Manage the verification system (Captcha Verification)")
+  .setDescription("✅ Manage the verification system (Captcha or invite code)")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 
   // /verify setup
@@ -41,6 +43,18 @@ export const data = new SlashCommandBuilder()
           .setName("verified_role")
           .setDescription("🎖️ Role to grant upon successful verification")
           .setRequired(true),
+      )
+      // Discord rejects required options that come after optional ones, so
+      // `mode` must stay with the other required option at the top.
+      .addStringOption((o) =>
+        o
+          .setName("mode")
+          .setDescription("🔐 Verification method (Captcha or Code)")
+          .setRequired(true)
+          .addChoices(
+            { name: "Captcha — solve an image code", value: "captcha" },
+            { name: "Code — member sends invite + code", value: "code" },
+          ),
       )
       .addChannelOption((o) =>
         o
@@ -106,10 +120,22 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const verifiedRole = interaction.options.getRole("verified_role", true);
     const unverifiedRole = interaction.options.getRole("unverified_role");
     const targetChannel = interaction.options.getChannel("channel") ?? interaction.channel;
+
+    // Preserve the current mode when the option is absent. That happens only
+    // when the command definition has not been re-registered yet; silently
+    // dropping a Code-mode server to Captcha would also invalidate its codes.
+    const previous = getVerificationConfig(interaction.guildId);
+    const requestedMode = interaction.options.getString("mode");
+    const mode: VerificationMode =
+      requestedMode === "code" || requestedMode === "captcha"
+        ? requestedMode
+        : (previous?.verificationMode ?? "captcha");
     const embedTitle = interaction.options.getString("title") ?? "Verify yourself";
     const embedDescription =
       interaction.options.getString("description") ??
-      "Click the button below and solve the short captcha to unlock the server.";
+      (mode === "code"
+        ? "Click the button below and enter the code that came with your invite."
+        : "Click the button below and solve the short captcha to unlock the server.");
     const successMessage =
       interaction.options.getString("success_message") ??
       "You're verified. Welcome to {server}!";
@@ -128,7 +154,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       return interaction.editReply(resolved.error);
     }
 
-    const previous = getVerificationConfig(interaction.guildId);
     let storedImage: string | null = previous?.imageUrl ?? null;
     if (resolved.image?.kind === "attachment") {
       try {
@@ -156,11 +181,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       embedDescription,
       successMessage,
       imageUrl: storedImage,
+      verificationMode: mode,
       createdAt: Date.now(),
     });
     // Swap happened — drop the replaced local copy (no-op for URLs).
     if (previous?.imageUrl && previous.imageUrl !== storedImage) {
       deleteLocalPanelImage(previous.imageUrl);
+    }
+    // Any setup that is not Code mode invalidates every outstanding invite
+    // code. Staying in Code mode must not wipe codes still in circulation.
+    // (Unconditional for non-Code modes so stale rows from a manually
+    // disabled config cannot revive if Code mode is re-enabled later.)
+    if (mode !== "code") {
+      deleteInviteCodesForGuild(interaction.guildId);
     }
 
     // Build the public verify panel as a Components v2 container.
@@ -185,9 +218,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId("verify_start")
-            .setLabel("Verify")
+            .setLabel(mode === "code" ? "Enter code" : "Verify")
             .setStyle(ButtonStyle.Success)
-            .setEmoji("✅"),
+            .setEmoji(mode === "code" ? "🔑" : "✅"),
         ),
       );
 
@@ -200,9 +233,18 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const roleList = unverifiedRole
       ? `✅ Grant: ${verifiedRole}\n🚫 Remove: ${unverifiedRole}`
       : `✅ Grant: ${verifiedRole}`;
+    const modeLine =
+      mode === "code"
+        ? "🔑 Mode: **Code** — `?inv` now includes one single-use code per invite"
+        : "🔐 Mode: **Captcha** — users solve an image code";
+    const codeHint =
+      mode === "code"
+        ? "\n💡 A member must send the invited user both the invite link and its code." +
+          "\n🔒 Run `?inv` where only trusted members can read the channel."
+        : "";
 
     return interaction.editReply(
-      `✅ Verification system set up!\n${roleList}\n📨 Verification panel sent to ${targetChannel}`,
+      `✅ Verification system set up!\n${modeLine}\n${roleList}\n📨 Verification panel sent to ${targetChannel}${codeHint}`,
     );
   }
 
@@ -220,6 +262,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     disableVerificationConfig(interaction.guildId);
+    deleteInviteCodesForGuild(interaction.guildId);
     deleteLocalPanelImage(existing.imageUrl);
     return interaction.reply({
       content: "✅ Verification system disabled",
