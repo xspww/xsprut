@@ -5,6 +5,8 @@ import {
   ContainerBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  RoleSelectMenuBuilder,
+  ChannelSelectMenuBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
@@ -155,6 +157,41 @@ export function buildVerifyPanel(guildId: string) {
       new ButtonBuilder().setCustomId("panel:verify:disable").setLabel("⛔ Disable").setStyle(ButtonStyle.Danger),
     ),
   );
+  container.addSeparatorComponents(new SeparatorBuilder());
+
+  // Mode selector
+  const modeSelect = new StringSelectMenuBuilder()
+    .setCustomId("panel:verify:mode")
+    .setPlaceholder("Verification mode");
+  modeSelect.addOptions(
+    new StringSelectMenuOptionBuilder().setLabel("🔐 Captcha (image code)").setValue("captcha").setDefault(cfg.verificationMode === "captcha"),
+    new StringSelectMenuOptionBuilder().setLabel("🔑 Code (invite + code)").setValue("code").setDefault(cfg.verificationMode === "code"),
+  );
+  container.addActionRowComponents(
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(modeSelect),
+  );
+
+  // Verified role selector
+  const verifiedRoleSelect = new RoleSelectMenuBuilder()
+    .setCustomId("panel:verify:role:verified")
+    .setPlaceholder("Verified role")
+    .setMinValues(1)
+    .setMaxValues(1);
+  container.addActionRowComponents(
+    new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(verifiedRoleSelect),
+  );
+
+  // Panel channel selector
+  const channelSelect = new ChannelSelectMenuBuilder()
+    .setCustomId("panel:verify:channel")
+    .setPlaceholder("Panel channel")
+    .setMinValues(1)
+    .setMaxValues(1)
+    .setChannelTypes([0]);
+  container.addActionRowComponents(
+    new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect),
+  );
+
   container.addActionRowComponents(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId("panel:back").setLabel("⬅️ Back").setStyle(ButtonStyle.Secondary),
@@ -390,6 +427,15 @@ export function buildVerifyEditModal(cfg: ReturnType<typeof getVerificationConfi
         .setMaxLength(500)
         .setValue(cfg?.imageUrl ?? ""),
     ),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(
+      new TextInputBuilder()
+        .setCustomId("unverified")
+        .setLabel("Unverified role ID (หรือ 'clear')")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(30)
+        .setValue(cfg?.unverifiedRoleId ?? ""),
+    ),
   );
   return modal;
 }
@@ -406,11 +452,134 @@ export async function handlePanelSelect(interaction: any) {
     return;
   }
   const customId = interaction.customId;
+
+  // ── Protect room select ──
   if (customId === "panel:protect:select") {
     const selected = interaction.values?.[0];
     await interaction.update({ components: [await buildProtectPanel(guildId, selected)], flags: MessageFlags.IsComponentsV2 });
     return;
   }
+
+  // ── Verify mode select (string) ──
+  if (customId === "panel:verify:mode") {
+    const mode = interaction.values?.[0] === "code" ? "code" : "captcha";
+    const cfg = getVerificationConfig(guildId);
+    if (!cfg) {
+      await interaction.reply({ content: "❌ ยังไม่ได้ตั้งค่า", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    // Invalidate invite codes if switching away from code mode
+    if (mode !== "code") {
+      const { deleteInviteCodesForGuild } = await import("./verifyManager.js");
+      deleteInviteCodesForGuild(guildId);
+    }
+    const { saveVerificationConfig } = await import("./verifyManager.js");
+    saveVerificationConfig({
+      guildId,
+      channelId: cfg.channelId,
+      verifiedRoleId: cfg.verifiedRoleId,
+      unverifiedRoleId: cfg.unverifiedRoleId,
+      embedTitle: cfg.embedTitle,
+      embedDescription: cfg.embedDescription,
+      successMessage: cfg.successMessage,
+      imageUrl: cfg.imageUrl,
+      verificationMode: mode as any,
+      createdAt: cfg.createdAt,
+    });
+    // Re-post public panel if mode changed (button label depends on mode)
+    if (cfg.panelMessageId && cfg.channelId) {
+      const channel = await interaction.client.channels.fetch(cfg.channelId).catch(() => null);
+      if (channel?.isTextBased() && channel.isSendable()) {
+        try { await (channel as any).messages.delete(cfg.panelMessageId); } catch { /* ignore */ }
+        const newContainer = buildVerifyPublicContainer({
+          embedTitle: cfg.embedTitle,
+          embedDescription: cfg.embedDescription,
+          mode: mode as any,
+          imageUrl: cfg.imageUrl,
+        });
+        try {
+          const sent = await (channel as any).send({
+            components: [newContainer],
+            files: panelImageFilesForPost(cfg.imageUrl),
+            flags: MessageFlags.IsComponentsV2,
+          });
+          updatePanelMessageId(guildId, sent.id);
+        } catch (e) {
+          logger.warn(`[PANEL] re-post after mode change failed: ${e}`);
+        }
+      }
+    }
+    await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
+    return;
+  }
+
+  // ── Verify verified role select (role) ──
+  if (customId === "panel:verify:role:verified") {
+    const roleId = interaction.values?.[0] ?? interaction.roles?.first()?.id;
+    if (!roleId) {
+      await interaction.reply({ content: "❌ ไม่ได้เลือก role", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const cfg = getVerificationConfig(guildId);
+    if (!cfg) {
+      await interaction.reply({ content: "❌ ยังไม่ได้ตั้งค่า", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const { saveVerificationConfig } = await import("./verifyManager.js");
+    saveVerificationConfig({
+      guildId,
+      channelId: cfg.channelId,
+      verifiedRoleId: roleId,
+      unverifiedRoleId: cfg.unverifiedRoleId,
+      embedTitle: cfg.embedTitle,
+      embedDescription: cfg.embedDescription,
+      successMessage: cfg.successMessage,
+      imageUrl: cfg.imageUrl,
+      verificationMode: cfg.verificationMode,
+      createdAt: cfg.createdAt,
+    });
+    await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
+    return;
+  }
+
+  // ── Verify channel select (channel) ──
+  if (customId === "panel:verify:channel") {
+    const channelId = interaction.values?.[0] ?? interaction.channels?.first()?.id;
+    if (!channelId) {
+      await interaction.reply({ content: "❌ ไม่ได้เลือก channel", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const cfg = getVerificationConfig(guildId);
+    if (!cfg) {
+      await interaction.reply({ content: "❌ ยังไม่ได้ตั้งค่า", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const oldChannelId = cfg.channelId;
+    const { saveVerificationConfig } = await import("./verifyManager.js");
+    saveVerificationConfig({
+      guildId,
+      channelId,
+      verifiedRoleId: cfg.verifiedRoleId,
+      unverifiedRoleId: cfg.unverifiedRoleId,
+      embedTitle: cfg.embedTitle,
+      embedDescription: cfg.embedDescription,
+      successMessage: cfg.successMessage,
+      imageUrl: cfg.imageUrl,
+      verificationMode: cfg.verificationMode,
+      createdAt: cfg.createdAt,
+    });
+    // If channel changed, delete old panel message (user can Re-post to new channel)
+    if (oldChannelId !== channelId && cfg.panelMessageId) {
+      const oldChannel = await interaction.client.channels.fetch(oldChannelId).catch(() => null);
+      if (oldChannel?.isTextBased()) {
+        try { await (oldChannel as any).messages.delete(cfg.panelMessageId); } catch { /* ignore */ }
+      }
+      updatePanelMessageId(guildId, null);
+    }
+    await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
+    return;
+  }
+
   await interaction.reply({ content: "❌ Select ไม่รู้จัก", flags: MessageFlags.Ephemeral });
 }
 
@@ -725,6 +894,7 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
     const description = interaction.fields.getTextInputValue("description").trim();
     const success = interaction.fields.getTextInputValue("success").trim();
     const bannerRaw = interaction.fields.getTextInputValue("banner").trim();
+    const unverifiedRaw = interaction.fields.getTextInputValue("unverified").trim();
 
     if (!title) {
       await interaction.reply({ content: "❌ Title ห้ามว่าง", flags: MessageFlags.Ephemeral });
@@ -745,6 +915,18 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
       nextImage = bannerRaw;
     }
 
+    // Resolve unverified role
+    let nextUnverified: string | null = cfg.unverifiedRoleId;
+    if (unverifiedRaw.toLowerCase() === "clear") {
+      nextUnverified = null;
+    } else if (unverifiedRaw) {
+      if (!/^\d{15,20}$/.test(unverifiedRaw)) {
+        await interaction.reply({ content: "❌ Unverified role ต้องเป็น role ID (ตัวเลข) หรือ 'clear'", flags: MessageFlags.Ephemeral });
+        return;
+      }
+      nextUnverified = unverifiedRaw;
+    }
+
     // Save config (reuse saveVerificationConfig)
     const { saveVerificationConfig, deleteInviteCodesForGuild } = await import("./verifyManager.js");
     // Need role info - keep existing
@@ -752,7 +934,7 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
       guildId,
       channelId: cfg.channelId,
       verifiedRoleId: cfg.verifiedRoleId,
-      unverifiedRoleId: cfg.unverifiedRoleId,
+      unverifiedRoleId: nextUnverified,
       embedTitle: title,
       embedDescription: description || cfg.embedDescription,
       successMessage: success || cfg.successMessage,
