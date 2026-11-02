@@ -308,6 +308,7 @@ export type VerificationConfig = {
   verificationMode: VerificationMode;
   enabled: number;
   createdAt: number;
+  panelMessageId: string | null;
 };
 
 export function getVerificationConfig(guildId: string): VerificationConfig | null {
@@ -323,7 +324,7 @@ export function getVerificationConfig(guildId: string): VerificationConfig | nul
   };
 }
 
-export function saveVerificationConfig(cfg: Omit<VerificationConfig, "enabled">) {
+export function saveVerificationConfig(cfg: Omit<VerificationConfig, "enabled" | "panelMessageId"> & { panelMessageId?: string | null }) {
   // Guard the stored value even if a future caller passes an unknown string.
   const verificationMode: VerificationMode = cfg.verificationMode === "code" ? "code" : "captcha";
   db.prepare(
@@ -344,5 +345,9 @@ export function saveVerificationConfig(cfg: Omit<VerificationConfig, "enabled">)
 }
 
 export function disableVerificationConfig(guildId: string) {
-  db.prepare(`UPDATE verificationConfig SET enabled = 0 WHERE guildId = ?`).run(guildId);
+  db.prepare(`UPDATE verificationConfig SET enabled = 0, panelMessageId = NULL WHERE guildId = ?`).run(guildId);
+}
+
+export function updatePanelMessageId(guildId: string, messageId: string | null) {
+  db.prepare(`UPDATE verificationConfig SET panelMessageId = ? WHERE guildId = ?`).run(messageId, guildId);
 }

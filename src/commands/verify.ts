@@ -18,6 +18,7 @@ import {
   saveVerificationConfig,
   disableVerificationConfig,
   deleteInviteCodesForGuild,
+  updatePanelMessageId,
   type VerificationMode,
 } from "../lib/verifyManager";
 import {
@@ -27,6 +28,7 @@ import {
   persistPanelImageFromUrl,
   resolvePanelImageInput,
 } from "../lib/panelImage";
+import { buildVerifyPublicContainer } from "../lib/panel";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
@@ -197,38 +199,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     // Build the public verify panel as a Components v2 container.
-    const bannerUrl = panelImageDisplayUrl(storedImage);
-    const container = new ContainerBuilder().setAccentColor(0x22c55e);
-    if (bannerUrl) {
-      container
-        .addMediaGalleryComponents(
-          new MediaGalleryBuilder().addItems(
-            new MediaGalleryItemBuilder().setURL(bannerUrl).setDescription("Verification banner"),
-          ),
-        )
-        .addSeparatorComponents(new SeparatorBuilder());
-    }
-    container
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`# ${embedTitle}`),
-        new TextDisplayBuilder().setContent(embedDescription),
-      )
-      .addSeparatorComponents(new SeparatorBuilder())
-      .addActionRowComponents(
-        new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId("verify_start")
-            .setLabel(mode === "code" ? "Enter code" : "Verify")
-            .setStyle(ButtonStyle.Success)
-            .setEmoji(mode === "code" ? "🔑" : "✅"),
-        ),
-      );
+    const container = buildVerifyPublicContainer({
+      embedTitle,
+      embedDescription,
+      mode,
+      imageUrl: storedImage,
+    });
 
-    await (targetChannel as TextChannel).send({
+    const sentPanel = await (targetChannel as TextChannel).send({
       components: [container],
       files: panelImageFilesForPost(storedImage),
       flags: MessageFlags.IsComponentsV2,
     });
+    updatePanelMessageId(interaction.guildId, sentPanel.id);
 
     const roleList = unverifiedRole
       ? `✅ Grant: ${verifiedRole}\n🚫 Remove: ${unverifiedRole}`

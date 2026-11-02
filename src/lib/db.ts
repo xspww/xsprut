@@ -191,9 +191,9 @@ CREATE TABLE IF NOT EXISTS verificationConfig (
     imageUrl TEXT,
     verificationMode TEXT NOT NULL DEFAULT 'captcha',
     enabled BOOLEAN NOT NULL DEFAULT 1,
-    createdAt INTEGER NOT NULL
+    createdAt INTEGER NOT NULL,
+    panelMessageId TEXT
 );
-
 -- One verification code per temporary invite (see ?inv). The plaintext code
 -- is never stored: only its SHA-256 hash, so a leaked data.db cannot be used to
 -- verify. Codes are guild-scoped, expire with the invite, and are single-use.
@@ -557,6 +557,19 @@ if (!verificationModeExists) {
     logger.info("Added verificationMode column to verificationConfig");
   } catch (e) {
     logger.error("Failed to migrate verificationConfig (verificationMode):", e);
+  }
+}
+
+// Panel message id for the public verify panel (so the panel can edit/re-post it).
+const panelMessageIdExists = db
+  .prepare(`SELECT 1 FROM pragma_table_info('verificationConfig') WHERE name = 'panelMessageId'`)
+  .get();
+if (!panelMessageIdExists) {
+  try {
+    db.exec(`ALTER TABLE verificationConfig ADD COLUMN panelMessageId TEXT;`);
+    logger.info("Added panelMessageId column to verificationConfig");
+  } catch (e) {
+    logger.error("Failed to migrate verificationConfig (panelMessageId):", e);
   }
 }
 

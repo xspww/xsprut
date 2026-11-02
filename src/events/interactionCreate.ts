@@ -30,6 +30,7 @@ import {
   type VerificationConfig,
 } from "../lib/verifyManager";
 import { renderCaptchaImage } from "../lib/captchaImage";
+import { handlePanelButton, handlePanelModal, isAdmin } from "../lib/panel";
 
 export const name = Events.InteractionCreate;
 
@@ -175,6 +176,19 @@ export async function execute(interaction: Interaction) {
   } else if (interaction.isButton()) {
     const { customId, user, guildId } = interaction;
 
+    // ─── Panel system buttons ──────────────────────────────────────────────
+    if (customId.startsWith("panel:")) {
+      try {
+        await handlePanelButton(interaction);
+      } catch (e) {
+        logger.error("[PANEL] button handler error:", e);
+        try {
+          await interaction.reply({ content: "❌ เกิดข้อผิดพลาด", flags: MessageFlags.Ephemeral });
+        } catch { /* ignore */ }
+      }
+      return;
+    }
+
     // User pressed the "Verify" button on the verification panel
     if (customId === "verify_start") {
       try {
@@ -256,6 +270,17 @@ export async function execute(interaction: Interaction) {
 
   // ─── Modal Submissions ─────────────────────────────────────────────────────
   } else if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith("panel:")) {
+      try {
+        await handlePanelModal(interaction);
+      } catch (e) {
+        logger.error("[PANEL] modal handler error:", e);
+        try {
+          await interaction.reply({ content: "❌ เกิดข้อผิดพลาด", flags: MessageFlags.Ephemeral });
+        } catch { /* ignore */ }
+      }
+      return;
+    }
     // ── Captcha mode ────────────────────────────────────────────────────────
     if (interaction.customId === "verify_modal_submit") {
       const { user, guildId, guild } = interaction;
