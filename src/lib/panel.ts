@@ -75,7 +75,7 @@ export function buildMainMenu() {
   );
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("-# Powered by WEAO"),
+    new TextDisplayBuilder().setContent("-# Powered by xspww"),
   );
   return container;
 }
@@ -163,7 +163,7 @@ export function buildVerifyPanel(guildId: string) {
   );
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("-# Powered by WEAO"),
+    new TextDisplayBuilder().setContent("-# Powered by xspww"),
   );
   return container;
 }
@@ -192,7 +192,7 @@ export function buildProtectPanel(guildId: string, channelId?: string | null) {
       ),
     );
     container.addSeparatorComponents(new SeparatorBuilder());
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent("-# Powered by WEAO"));
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent("-# Powered by xspww"));
     return container;
   }
 
@@ -228,7 +228,7 @@ export function buildProtectPanel(guildId: string, channelId?: string | null) {
       ),
     );
     container.addSeparatorComponents(new SeparatorBuilder());
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent("-# Powered by WEAO"));
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent("-# Powered by xspww"));
     return container;
   }
 
@@ -262,7 +262,7 @@ export function buildProtectPanel(guildId: string, channelId?: string | null) {
   );
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("-# Powered by WEAO"),
+    new TextDisplayBuilder().setContent("-# Powered by xspww"),
   );
   return container;
 }
@@ -297,7 +297,7 @@ export function buildStatusPanel(guildId: string) {
   );
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("-# Powered by WEAO"),
+    new TextDisplayBuilder().setContent("-# Powered by xspww"),
   );
   return container;
 }
@@ -322,7 +322,7 @@ export function buildComingSoonPanel(title: string, hint?: string) {
   );
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("-# Powered by WEAO"),
+    new TextDisplayBuilder().setContent("-# Powered by xspww"),
   );
   return container;
 }
