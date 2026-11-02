@@ -5,6 +5,7 @@ import {
   MessageFlags,
   PermissionFlagsBits,
   SeparatorBuilder,
+  TextChannel,
   TextDisplayBuilder,
 } from "discord.js";
 import db from "../lib/db";
@@ -168,7 +169,7 @@ export async function execute(message: Message) {
           // check the channel overwrite-resolved permissions, not the
           // guild-wide ones (they can differ per channel).
           const botMember = await message.guild.members.fetchMe();
-          const channelPerms = (message.channel as any).permissionsFor?.(botMember);
+          const channelPerms = (message.channel as TextChannel).permissionsFor?.(botMember);
           if (!channelPerms?.has(PermissionFlagsBits.CreateInstantInvite)) {
             await message.reply("❌ The bot lacks the `Create Instant Invite` permission in this channel");
             return;
@@ -199,7 +200,7 @@ export async function execute(message: Message) {
             }
           }
 
-          const invite = await (message.channel as any).createInvite({
+          const invite = await (message.channel as TextChannel).createInvite({
             maxAge: 30 * 60, // Expire after 30 minutes (in seconds)
             maxUses: 1, // Maximum number of uses: 1
             // Discord reuses a matching invite by default. That invite may

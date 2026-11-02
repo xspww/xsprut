@@ -264,7 +264,9 @@ const lastAlertedExists = db
 if (!lastAlertedExists) {
   try {
     db.exec(`ALTER TABLE executorLastState ADD COLUMN lastAlertedVersion TEXT;`);
-  } catch {}
+  } catch (e: any) {
+    logger.error("DB migration failed: ", e?.message ?? e);
+  }
 }
 
 const execAlertsCustomContentExists = db

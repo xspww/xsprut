@@ -711,7 +711,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       try {
         const conn = getVoiceConnection(interaction.guildId);
         if (conn) conn.destroy();
-      } catch {}
+      } catch (e: any) {
+        logger.warn("Executor status refresh failed: ", e?.message ?? e);
+      }
 
       const row = db
         .prepare(`SELECT voiceChannelId FROM botVoiceChannels WHERE guildId = ?`)

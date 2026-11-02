@@ -6,6 +6,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { client } from "../lib/client";
+import logger from "../lib/logger";
 import { collectKickedGuilds, deleteGuildData } from "../lib/guildCleanup";
 import { clearDbCaches } from "../lib/dbCache";
 
@@ -59,7 +60,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     try {
       const conn = getVoiceConnection(guildId);
       if (conn) conn.destroy();
-    } catch {}
+    } catch (e: any) {
+      logger.warn("Cleanup failed: ", e?.message ?? e);
+    }
   }
 
   const deleted = deleteGuildData(orphaned);

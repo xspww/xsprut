@@ -30,7 +30,9 @@ export async function execute(...args: any[]) {
     const client = args[0];
     try {
       logger.info(`Bot user: ${client?.user?.tag ?? 'unknown'} (${client?.user?.id ?? 'unknown id'})`);
-    } catch {}
+    } catch (e: any) {
+      logger.error("Client ready monitoring error: ", e?.message ?? e);
+    }
 
     // Full-auto cleanup: wipe DB data for any guild the bot is no longer a
     // member of (kicked/left), before monitoring starts so removed guilds are

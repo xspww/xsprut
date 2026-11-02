@@ -70,7 +70,9 @@ export async function execute(interaction: Interaction) {
   if (interaction.isChatInputCommand()) {
     try {
       logger.info(`Received command interaction: ${interaction.commandName} from ${interaction.user?.tag ?? interaction.user?.id}`);
-    } catch {}
+    } catch (e) {
+      logger.warn("Interaction error: ", e);
+    }
 
     // ✅ Restrict to allowed users (if list is non‑empty)
     const allowed = config.ALLOWED_USER_IDS;
@@ -81,7 +83,9 @@ export async function execute(interaction: Interaction) {
         } else {
           await interaction.reply({ content: "You are not authorized to use this bot", flags: MessageFlags.Ephemeral });
         }
-      } catch {}
+      } catch (e) {
+        logger.warn("Embed refresh error: ", e);
+      }
       return;
     }
 
@@ -225,7 +229,9 @@ export async function execute(interaction: Interaction) {
         logger.error("Error in verify_start button handler:", err);
         try {
           return interaction.reply({ content: "❌ An error occurred, please try again", flags: MessageFlags.Ephemeral });
-        } catch {}
+        } catch (e) {
+          logger.warn("Button interaction error: ", e);
+        }
       }
     }
 

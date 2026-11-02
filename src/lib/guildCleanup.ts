@@ -79,7 +79,9 @@ export function cleanupOrphanedGuilds(): string[] {
     try {
       const conn = getVoiceConnection(guildId);
       if (conn) conn.destroy();
-    } catch {}
+    } catch (e: any) {
+      logger.warn("Guild cleanup failed for ", guildId, ": ", e?.message ?? e);
+    }
 
     logger.info(`Guild cleanup: bot is no longer in guild ${guildId} (kicked) — wiping its data.`);
   }
