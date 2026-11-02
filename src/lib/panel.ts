@@ -529,7 +529,7 @@ export async function handlePanelButton(interaction: ButtonInteraction) {
     disableVerificationConfig(guildId);
     const { deleteInviteCodesForGuild } = await import("./verifyManager.js");
     deleteInviteCodesForGuild(guildId);
-    try { await (interaction as any).update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 }); } catch { /* ignore */ }
+    await (interaction as any).update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
     await interaction.followUp({ content: "✅ Verification ถูกปิดแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
@@ -637,7 +637,7 @@ export async function handlePanelButton(interaction: ButtonInteraction) {
     db.prepare(`DELETE FROM protectedRooms WHERE guildId = ? AND channelId = ?`).run(guildId, channelId);
     invalidateProtectedRoom(guildId, channelId);
     if (existing?.imageUrl) deleteLocalPanelImage(existing.imageUrl);
-    await interaction.update({ components: [buildProtectPanel(guildId)], flags: MessageFlags.IsComponentsV2 } as any);
+    await (interaction as any).update({ components: [buildProtectPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
     await interaction.followUp({ content: "✅ Protected room ถูกปิดแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
@@ -796,7 +796,7 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
         await (interaction.message as any).edit({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
       }
     } catch { /* ignore */ }
-    await interaction.followUp({ content: "✅ Verification config อัปเดตแล้ว", flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: "✅ Verification config อัปเดตแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -852,7 +852,7 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
         await (interaction.message as any).edit({ components: [buildProtectPanel(guildId, channelId)], flags: MessageFlags.IsComponentsV2 });
       }
     } catch { /* ignore */ }
-    await interaction.followUp({ content: "✅ Banner อัปเดตแล้ว", flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: "✅ Banner อัปเดตแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -872,7 +872,7 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
         await (interaction.message as any).edit({ components: [buildProtectPanel(guildId, channelId)], flags: MessageFlags.IsComponentsV2 });
       }
     } catch { /* ignore */ }
-    await interaction.followUp({ content: `✅ Timeout set to ${minutes} นาที`, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: `✅ Timeout set to ${minutes} นาที`, flags: MessageFlags.Ephemeral });
     return;
   }
 
