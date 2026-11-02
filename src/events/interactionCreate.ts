@@ -30,7 +30,7 @@ import {
   type VerificationConfig,
 } from "../lib/verifyManager";
 import { renderCaptchaImage } from "../lib/captchaImage";
-import { handlePanelButton, handlePanelModal, isAdmin } from "../lib/panel";
+import { handlePanelButton, handlePanelModal, handlePanelSelect, isAdmin } from "../lib/panel";
 
 export const name = Events.InteractionCreate;
 
@@ -269,7 +269,20 @@ export async function execute(interaction: Interaction) {
     }
 
   // ─── Modal Submissions ─────────────────────────────────────────────────────
-  } else if (interaction.isModalSubmit()) {
+  // ─── String Select Menus ──────────────────────────────────────────────────
+  }
+
+  else if (interaction.isStringSelectMenu() && interaction.customId.startsWith("panel:")) {
+    try {
+      await handlePanelSelect(interaction);
+    } catch (e) {
+      logger.error("[PANEL] select handler error:", e);
+      try { await interaction.reply({ content: "An error occurred", flags: MessageFlags.Ephemeral }); } catch { /* ignore */ }
+    }
+    return;
+  }
+
+  else if (interaction.isModalSubmit()) {
     if (interaction.customId.startsWith("panel:")) {
       try {
         await handlePanelModal(interaction);

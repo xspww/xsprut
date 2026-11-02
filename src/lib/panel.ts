@@ -3,6 +3,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
@@ -156,7 +158,7 @@ export function buildVerifyPanel(guildId: string) {
   container.addActionRowComponents(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId("panel:back").setLabel("⬅️ Back").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("panel:refresh").setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("panel:refresh:verify").setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary),
     ),
   );
   container.addSeparatorComponents(new SeparatorBuilder());
@@ -170,11 +172,18 @@ export function buildVerifyPanel(guildId: string) {
 export function buildProtectPanel(guildId: string, channelId?: string | null) {
   const container = new ContainerBuilder().setAccentColor(0xef4444);
 
-  // If no channelId provided, show hint
-  if (!channelId) {
+  // List protected rooms in this guild (for the channel selector)
+  const rooms = db
+    .prepare(`SELECT channelId FROM protectedRooms WHERE guildId = ?`)
+    .all(guildId) as { channelId: string }[];
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent("# 🔒 Protected Room"),
+  );
+
+  if (rooms.length === 0) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("# 🔒 Protected Room"),
-      new TextDisplayBuilder().setContent("⚠️ ต้องรันใน channel ที่เป็น protected room หรือระบุ channel ผ่าน slash command `/protectroom`"),
+      new TextDisplayBuilder().setContent("ยังไม่มี protected room — ใช้ `/protectroom setup` ใน channel ที่ต้องการ"),
     );
     container.addSeparatorComponents(new SeparatorBuilder());
     container.addActionRowComponents(
@@ -182,28 +191,50 @@ export function buildProtectPanel(guildId: string, channelId?: string | null) {
         new ButtonBuilder().setCustomId("panel:back").setLabel("⬅️ Back").setStyle(ButtonStyle.Secondary),
       ),
     );
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent("-# Powered by WEAO"));
     return container;
   }
 
-  const room = getProtectedRoom(guildId, channelId) as any;
+  // Channel selector (string select menu)
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("panel:protect:select")
+    .setPlaceholder("เลือก protected room channel");
+  for (const r of rooms) {
+    select.addOptions(
+      new StringSelectMenuOptionBuilder()
+        .setLabel(`#${r.channelId}`)
+        .setValue(r.channelId)
+        .setDefault(r.channelId === channelId),
+    );
+  }
+  // Discord select menu needs a label; fetch channel names best-effort not available here,
+  // so we show channelId. Good enough for selection.
+  container.addActionRowComponents(
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+  );
+
+  // If a valid channelId is selected, show details + actions
+  const room = channelId ? (getProtectedRoom(guildId, channelId) as any) : null;
   if (!room) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("# 🔒 Protected Room"),
-      new TextDisplayBuilder().setContent(`Channel <#${channelId}> ไม่ได้ตั้งเป็น protected room\nใช้ \`/protectroom setup\` ก่อน`),
+      new TextDisplayBuilder().setContent("เลือก channel จาก dropdown ด้านบน หรือใช้ `/protectroom setup`"),
     );
     container.addSeparatorComponents(new SeparatorBuilder());
     container.addActionRowComponents(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId("panel:back").setLabel("⬅️ Back").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("panel:refresh:protect").setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary),
       ),
     );
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent("-# Powered by WEAO"));
     return container;
   }
 
   const meta = PROTECT_ACTION_META[room.actionType as ProtectAction];
   const bannerLine = room.imageUrl ? "🖼️ มี banner" : "🖼️ ไม่มี banner";
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("# 🔒 Protected Room"),
     new TextDisplayBuilder().setContent(
       `Channel: <#${channelId}>\nAction: ${meta.displayName}\nTimeout: ${room.timeoutDuration ? room.timeoutDuration / 60000 + " นาที" : "-"}\nPunished: ${room.actionCount ?? 0}\n${bannerLine}`,
     ),
@@ -220,8 +251,13 @@ export function buildProtectPanel(guildId: string, channelId?: string | null) {
   container.addActionRowComponents(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`panel:protect:repost:${channelId}`).setLabel("🔄 Re-post").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`panel:protect:disable:${channelId}`).setLabel("⛔ Disable").setStyle(ButtonStyle.Danger),
+    ),
+  );
+  container.addActionRowComponents(
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId("panel:back").setLabel("⬅️ Back").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("panel:refresh").setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`panel:refresh:protect:${channelId}`).setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary),
     ),
   );
   container.addSeparatorComponents(new SeparatorBuilder());
@@ -256,7 +292,7 @@ export function buildStatusPanel(guildId: string) {
   container.addActionRowComponents(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId("panel:back").setLabel("⬅️ Back").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("panel:refresh").setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("panel:refresh:status").setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary),
     ),
   );
   container.addSeparatorComponents(new SeparatorBuilder());
@@ -267,12 +303,17 @@ export function buildStatusPanel(guildId: string) {
 }
 
 // ─── Coming soon stub ────────────────────────────────────────────────────────
-export function buildComingSoonPanel(title: string) {
+export function buildComingSoonPanel(title: string, hint?: string) {
   const container = new ContainerBuilder().setAccentColor(0x6b7280);
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(`# ${title}`),
-    new TextDisplayBuilder().setContent("🚧 กำลังพัฒนา — ใช้ slash command ไปก่อนนะครับ"),
+    new TextDisplayBuilder().setContent("🚧 กำลังพัฒนา"),
   );
+  if (hint) {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(hint),
+    );
+  }
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addActionRowComponents(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -333,6 +374,26 @@ export function buildVerifyEditModal(cfg: ReturnType<typeof getVerificationConfi
   return modal;
 }
 
+// ─── Select menu handler ─────────────────────────────────────────────────────
+export async function handlePanelSelect(interaction: any) {
+  if (!isAdmin(interaction)) {
+    await deny(interaction);
+    return;
+  }
+  const guildId = interaction.guildId;
+  if (!guildId) {
+    await interaction.reply({ content: "❌ ใช้ได้เฉพาะใน server", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const customId = interaction.customId;
+  if (customId === "panel:protect:select") {
+    const selected = interaction.values?.[0];
+    await interaction.update({ components: [buildProtectPanel(guildId, selected)], flags: MessageFlags.IsComponentsV2 });
+    return;
+  }
+  await interaction.reply({ content: "❌ Select ไม่รู้จัก", flags: MessageFlags.Ephemeral });
+}
+
 // ─── Button handler ──────────────────────────────────────────────────────────
 export async function handlePanelButton(interaction: ButtonInteraction) {
   if (!isAdmin(interaction)) {
@@ -353,10 +414,23 @@ export async function handlePanelButton(interaction: ButtonInteraction) {
     return;
   }
 
-  // Refresh
+  // Refresh (view-aware)
   if (customId === "panel:refresh") {
-    // Re-render based on... we don't track current view. Default to main.
     await interaction.update({ components: [buildMainMenu()], flags: MessageFlags.IsComponentsV2 });
+    return;
+  }
+  if (customId === "panel:refresh:verify") {
+    await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
+    return;
+  }
+  if (customId.startsWith("panel:refresh:protect")) {
+    const parts = customId.split(":");
+    const ch = parts[3] || null;
+    await interaction.update({ components: [buildProtectPanel(guildId, ch)], flags: MessageFlags.IsComponentsV2 });
+    return;
+  }
+  if (customId === "panel:refresh:status") {
+    await interaction.update({ components: [buildStatusPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
     return;
   }
 
@@ -375,14 +449,15 @@ export async function handlePanelButton(interaction: ButtonInteraction) {
     return;
   }
   if (customId === "panel:alerts" || customId === "panel:executor" || customId === "panel:join" || customId === "panel:config" || customId === "panel:cleanup") {
-    const titleMap: Record<string, string> = {
-      "panel:alerts": "📡 Roblox Alerts",
-      "panel:executor": "🤖 Executor Status",
-      "panel:join": "👋 Join Alert",
-      "panel:config": "⚙️ General Config",
-      "panel:cleanup": "🧹 Cleanup",
+    const infoMap: Record<string, { title: string; hint: string }> = {
+      "panel:alerts": { title: "📡 Roblox Alerts", hint: "ใช้ `/robloxalert add` `/robloxalert remove` `/robloxalert list`" },
+      "panel:executor": { title: "🤖 Executor Status", hint: "ใช้ `/executorStatus track add|remove|edit` `/executorStatus config`" },
+      "panel:join": { title: "👋 Join Alert", hint: "ใช้ `/joinalert enable|disable|setchannel|setmessage`" },
+      "panel:config": { title: "⚙️ General Config", hint: "ใช้ `/config`" },
+      "panel:cleanup": { title: "🧹 Cleanup", hint: "ใช้ `/cleanup`" },
     };
-    await interaction.update({ components: [buildComingSoonPanel(titleMap[customId])], flags: MessageFlags.IsComponentsV2 });
+    const info = infoMap[customId];
+    await interaction.update({ components: [buildComingSoonPanel(info.title, info.hint)], flags: MessageFlags.IsComponentsV2 });
     return;
   }
 
@@ -444,11 +519,17 @@ export async function handlePanelButton(interaction: ButtonInteraction) {
     return;
   }
   if (customId === "panel:verify:disable:confirm") {
+    const cfg = getVerificationConfig(guildId);
+    if (cfg?.panelMessageId && cfg.channelId) {
+      const channel = await interaction.client.channels.fetch(cfg.channelId).catch(() => null);
+      if (channel?.isTextBased()) {
+        try { await (channel as any).messages.delete(cfg.panelMessageId); } catch { /* ignore */ }
+      }
+    }
     disableVerificationConfig(guildId);
-    // delete invite codes
     const { deleteInviteCodesForGuild } = await import("./verifyManager.js");
     deleteInviteCodesForGuild(guildId);
-    await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
+    try { await (interaction as any).update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 }); } catch { /* ignore */ }
     await interaction.followUp({ content: "✅ Verification ถูกปิดแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
@@ -507,6 +588,8 @@ export async function handlePanelButton(interaction: ButtonInteraction) {
   }
   if (customId.startsWith("panel:protect:timeout:")) {
     const channelId = customId.split(":")[3];
+    const room = getProtectedRoom(guildId, channelId) as any;
+    const currentMin = room?.timeoutDuration ? Math.round(room.timeoutDuration / 60000) : 10;
     const modal = new ModalBuilder()
       .setCustomId(`panel:protect:timeout:modal:${channelId}`)
       .setTitle("Set Timeout Duration");
@@ -518,10 +601,44 @@ export async function handlePanelButton(interaction: ButtonInteraction) {
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
           .setMaxLength(6)
-          .setValue("10"),
+          .setValue(String(currentMin)),
       ),
     );
     await interaction.showModal(modal);
+    return;
+  }
+  if (customId.startsWith("panel:protect:disable:")) {
+    const channelId = customId.split(":")[3];
+    // confirm dialog
+    const container = new ContainerBuilder().setAccentColor(0xef4444);
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("# ⛔ ยืนยันการปิด Protected Room"),
+      new TextDisplayBuilder().setContent(`Channel <#${channelId}> จะถูกยกเลิกการป้องกัน`),
+    );
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`panel:protect:disable:confirm:${channelId}`).setLabel("✅ ยืนยันปิด").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`panel:refresh:protect:${channelId}`).setLabel("❌ ยกเลิก").setStyle(ButtonStyle.Secondary),
+      ),
+    );
+    await interaction.update({ components: [container], flags: MessageFlags.IsComponentsV2 } as any);
+    return;
+  }
+  if (customId.startsWith("panel:protect:disable:confirm:")) {
+    const channelId = customId.split(":")[4];
+    const existing = db.prepare(`SELECT noticeMessageId, imageUrl FROM protectedRooms WHERE guildId = ? AND channelId = ?`).get(guildId, channelId) as any;
+    if (existing?.noticeMessageId) {
+      const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+      if (channel?.isTextBased()) {
+        try { await (channel as any).messages.delete(existing.noticeMessageId); } catch { /* ignore */ }
+      }
+    }
+    db.prepare(`DELETE FROM protectedRooms WHERE guildId = ? AND channelId = ?`).run(guildId, channelId);
+    invalidateProtectedRoom(guildId, channelId);
+    if (existing?.imageUrl) deleteLocalPanelImage(existing.imageUrl);
+    await interaction.update({ components: [buildProtectPanel(guildId)], flags: MessageFlags.IsComponentsV2 } as any);
+    await interaction.followUp({ content: "✅ Protected room ถูกปิดแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
   if (customId.startsWith("panel:protect:repost:")) {
@@ -674,7 +791,11 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
       deleteLocalPanelImage(cfg.imageUrl);
     }
 
-    try { await (interaction as any).update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 }); } catch { /* ignore */ }
+    try {
+      if (interaction.message) {
+        await (interaction.message as any).edit({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
+      }
+    } catch { /* ignore */ }
     await interaction.followUp({ content: "✅ Verification config อัปเดตแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
@@ -726,7 +847,11 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
       }
     }
 
-    try { await (interaction as any).update({ components: [buildProtectPanel(guildId, channelId)], flags: MessageFlags.IsComponentsV2 }); } catch { /* ignore */ }
+    try {
+      if (interaction.message) {
+        await (interaction.message as any).edit({ components: [buildProtectPanel(guildId, channelId)], flags: MessageFlags.IsComponentsV2 });
+      }
+    } catch { /* ignore */ }
     await interaction.followUp({ content: "✅ Banner อัปเดตแล้ว", flags: MessageFlags.Ephemeral });
     return;
   }
@@ -742,7 +867,11 @@ export async function handlePanelModal(interaction: ModalSubmitInteraction) {
     const ms = minutes * 60 * 1000;
     db.prepare(`UPDATE protectedRooms SET timeoutDuration = ? WHERE guildId = ? AND channelId = ?`).run(ms, guildId, channelId);
     invalidateProtectedRoom(guildId, channelId);
-    try { await (interaction as any).update({ components: [buildProtectPanel(guildId, channelId)], flags: MessageFlags.IsComponentsV2 }); } catch { /* ignore */ }
+    try {
+      if (interaction.message) {
+        await (interaction.message as any).edit({ components: [buildProtectPanel(guildId, channelId)], flags: MessageFlags.IsComponentsV2 });
+      }
+    } catch { /* ignore */ }
     await interaction.followUp({ content: `✅ Timeout set to ${minutes} นาที`, flags: MessageFlags.Ephemeral });
     return;
   }
