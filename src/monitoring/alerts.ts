@@ -69,7 +69,7 @@ export function createRobloxUpdateContainer(
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(downloadBtn);
 
   const footerText = new TextDisplayBuilder().setContent(
-    `Powered by WEAO | Channel : ${robloxChannel}`,
+    `-# Powered by WEAO | Channel : ${robloxChannel}`,
   );
 
   const container = new ContainerBuilder()

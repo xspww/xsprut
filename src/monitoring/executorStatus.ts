@@ -214,7 +214,7 @@ export function createExecutorUpdateContainer(opts: {
       banwaveRow,
   );
 
-  const footerText = new TextDisplayBuilder().setContent("Powered by WEAO");
+  const footerText = new TextDisplayBuilder().setContent("-# Powered by WEAO");
 
   const container = new ContainerBuilder().setAccentColor(0x22c55e);
 
@@ -576,7 +576,7 @@ async function applyEmbedStatusRows(
       const productText = `**Product**\n• Version: \`${verDisplay}\`\n• Roblox Version: \`${rbxVerDisplay}\`\n• Status: ${isWorking ? "🟢 Working" : "🔴 Patched"}${banwaveText ? `\n• Last banwave: \`${banwaveText}\`` : ""}`;
       const productTextDisplay = new TextDisplayBuilder().setContent(productText);
 
-      const timestampText = new TextDisplayBuilder().setContent(`Auto-updated. Last check: <t:${nowUnix}:R>`);
+      const timestampText = new TextDisplayBuilder().setContent(`-# Auto-updated. Last check: <t:${nowUnix}:R>`);
 
       const container = new ContainerBuilder().setAccentColor(accentColor);
       const logoUrl = exploit?.slug?.logo;
