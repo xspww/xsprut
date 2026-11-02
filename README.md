@@ -6,6 +6,8 @@
 
 <p align="center">Discord bot that tracks Roblox client updates and executor releases.</p>
 
+<p align="center"><a href="README.th.md">Thai version / เวอร์ชันภาษาไทย</a></p>
+
 <p align="center">
   <img src="https://img.shields.io/badge/node-20%2B-green" alt="node">
   <img src="https://img.shields.io/badge/discord.js-14-blue" alt="discord.js">
