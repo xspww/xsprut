@@ -11,6 +11,8 @@ import {
   SeparatorBuilder,
   SlashCommandBuilder,
   TextChannel,
+  type APIRole,
+  type Role,
   TextDisplayBuilder,
 } from "discord.js";
 import {
@@ -111,146 +113,197 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  const sub = interaction.options.getSubcommand();
-
-  if (sub === "setup") {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    if (!interaction.guildId) {
-      return interaction.editReply("❌ This can only be used in a server");
-    }
-
-    const verifiedRole = interaction.options.getRole("verified_role", true);
-    const unverifiedRole = interaction.options.getRole("unverified_role");
-    const targetChannel = interaction.options.getChannel("channel") ?? interaction.channel;
-
-    // Preserve the current mode when the option is absent. That happens only
-    // when the command definition has not been re-registered yet; silently
-    // dropping a Code-mode server to Captcha would also invalidate its codes.
-    const previous = getVerificationConfig(interaction.guildId);
-    const requestedMode = interaction.options.getString("mode");
-    const mode: VerificationMode =
-      requestedMode === "code" || requestedMode === "captcha"
-        ? requestedMode
-        : (previous?.verificationMode ?? "captcha");
-    const embedTitle = interaction.options.getString("title") ?? "Verify yourself";
-    const embedDescription =
-      interaction.options.getString("description") ??
-      (mode === "code"
-        ? "Click the button below and enter the code that came with your invite."
-        : "Click the button below and solve the short captcha to unlock the server.");
-    const successMessage =
-      interaction.options.getString("success_message") ??
-      "You're verified. Welcome to {server}!";
-
-    // Optional banner image (upload wins over URL). Uploaded files are
-    // persisted to the local store (like /protectroom) so re-running setup
-    // keeps showing the banner the admin configured last time.
-    const attachment = interaction.options.getAttachment("banner");
-    const resolved = resolvePanelImageInput(
-      attachment
-        ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType, size: attachment.size }
-        : null,
-      interaction.options.getString("banner_url"),
-    );
-    if (resolved.error) {
-      return interaction.editReply(resolved.error);
-    }
-
-    let storedImage: string | null = previous?.imageUrl ?? null;
-    if (resolved.image?.kind === "attachment") {
-      try {
-        storedImage = await persistPanelImageFromUrl(resolved.image.url, resolved.image.filename, {
-          contentType: attachment?.contentType,
-          scope: "verify",
-        });
-      } catch (e) {
-        return interaction.editReply(errorMessage(e) ?? "❌ Could not save the image");
-      }
-    } else if (resolved.image?.kind === "url") {
-      storedImage = resolved.image.url;
-    }
-
-    if (!targetChannel || !("send" in targetChannel)) {
-      return interaction.editReply("❌ Unable to send a message to this channel");
-    }
-
-    saveVerificationConfig({
-      guildId: interaction.guildId,
-      channelId: targetChannel.id,
-      verifiedRoleId: verifiedRole.id,
-      unverifiedRoleId: unverifiedRole?.id ?? null,
-      embedTitle,
-      embedDescription,
-      successMessage,
-      imageUrl: storedImage,
-      verificationMode: mode,
-      createdAt: Date.now(),
-    });
-    // Swap happened — drop the replaced local copy (no-op for URLs).
-    if (previous?.imageUrl && previous.imageUrl !== storedImage) {
-      deleteLocalPanelImage(previous.imageUrl);
-    }
-    // Any setup that is not Code mode invalidates every outstanding invite
-    // code. Staying in Code mode must not wipe codes still in circulation.
-    // (Unconditional for non-Code modes so stale rows from a manually
-    // disabled config cannot revive if Code mode is re-enabled later.)
-    if (mode !== "code") {
-      deleteInviteCodesForGuild(interaction.guildId);
-    }
-
-    // Build the public verify panel as a Components v2 container.
-    const container = buildVerifyPublicContainer({
-      embedTitle,
-      embedDescription,
-      mode,
-      imageUrl: storedImage,
-    });
-
-    const sentPanel = await (targetChannel as TextChannel).send({
-      components: [container],
-      files: panelImageFilesForPost(storedImage),
-      flags: MessageFlags.IsComponentsV2,
-    });
-    updatePanelMessageId(interaction.guildId, sentPanel.id);
-
-    const roleList = unverifiedRole
-      ? `✅ Grant: ${verifiedRole}\n🚫 Remove: ${unverifiedRole}`
-      : `✅ Grant: ${verifiedRole}`;
-    const modeLine =
-      mode === "code"
-        ? "🔑 Mode: **Code** — `?inv` now includes one single-use code per invite"
-        : "🔐 Mode: **Captcha** — users solve an image code";
-    const codeHint =
-      mode === "code"
-        ? "\n💡 A member must send the invited user both the invite link and its code." +
-          "\n🔒 Run `?inv` where only trusted members can read the channel."
-        : "";
-
-    return interaction.editReply(
-      `✅ Verification system set up!\n${modeLine}\n${roleList}\n📨 Verification panel sent to ${targetChannel}${codeHint}`,
-    );
-  }
-
-  if (sub === "remove") {
-    if (!interaction.guildId) {
-      return interaction.reply({ content: "❌ This can only be used in a server", flags: MessageFlags.Ephemeral });
-    }
-
-    const existing = getVerificationConfig(interaction.guildId);
-    if (!existing) {
+  switch (interaction.options.getSubcommand()) {
+    case "setup":
+      return verifySetup(interaction);
+    case "remove":
+      return verifyRemove(interaction);
+    default:
       return interaction.reply({
-        content: "❌ No verification system is configured in this server",
+        content: "❌ Unknown subcommand",
         flags: MessageFlags.Ephemeral,
       });
-    }
+  }
+}
 
-    disableVerificationConfig(interaction.guildId);
+/** /verify setup — configure the verification system for this server. */
+async function verifySetup(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  if (!interaction.guildId) {
+    return interaction.editReply("❌ This can only be used in a server");
+  }
+
+  // Preserve the current mode when the option is absent. That happens only
+  // when the command definition has not been re-registered yet; silently
+  // dropping a Code-mode server to Captcha would also invalidate its codes.
+  const previous = getVerificationConfig(interaction.guildId);
+  const mode = resolveRequestedMode(interaction, previous);
+  const embedTitle = interaction.options.getString("title") ?? "Verify yourself";
+  const embedDescription =
+    interaction.options.getString("description") ??
+    (mode === "code"
+      ? "Click the button below and enter the code that came with your invite."
+      : "Click the button below and solve the short captcha to unlock the server.");
+  const successMessage =
+    interaction.options.getString("success_message") ??
+    "You're verified. Welcome to {server}!";
+
+  const storedImage = await resolveStoredBanner(interaction, previous?.imageUrl ?? null);
+  if (storedImage === undefined) return;
+
+  const targetChannel = interaction.options.getChannel("channel") ?? interaction.channel;
+  if (!targetChannel || !("send" in targetChannel)) {
+    return interaction.editReply("❌ Unable to send a message to this channel");
+  }
+
+  const verifiedRole = interaction.options.getRole("verified_role", true);
+  const unverifiedRole = interaction.options.getRole("unverified_role");
+
+  saveVerificationConfig({
+    guildId: interaction.guildId,
+    channelId: targetChannel.id,
+    verifiedRoleId: verifiedRole.id,
+    unverifiedRoleId: unverifiedRole?.id ?? null,
+    embedTitle,
+    embedDescription,
+    successMessage,
+    imageUrl: storedImage,
+    verificationMode: mode,
+    createdAt: Date.now(),
+  });
+  // Swap happened — drop the replaced local copy (no-op for URLs).
+  if (previous?.imageUrl && previous.imageUrl !== storedImage) {
+    deleteLocalPanelImage(previous.imageUrl);
+  }
+  // Any setup that is not Code mode invalidates every outstanding invite
+  // code. Staying in Code mode must not wipe codes still in circulation.
+  // (Unconditional for non-Code modes so stale rows from a manually
+  // disabled config cannot revive if Code mode is re-enabled later.)
+  if (mode !== "code") {
     deleteInviteCodesForGuild(interaction.guildId);
-    deleteLocalPanelImage(existing.imageUrl);
+  }
+
+  // Build the public verify panel as a Components v2 container.
+  const container = buildVerifyPublicContainer({
+    embedTitle,
+    embedDescription,
+    mode,
+    imageUrl: storedImage,
+  });
+
+  const sentPanel = await (targetChannel as TextChannel).send({
+    components: [container],
+    files: panelImageFilesForPost(storedImage),
+    flags: MessageFlags.IsComponentsV2,
+  });
+  updatePanelMessageId(interaction.guildId, sentPanel.id);
+
+  return interaction.editReply(buildSetupReply({
+    mode,
+    verifiedRole,
+    unverifiedRole,
+    targetChannel,
+  }));
+}
+
+/** The verification mode to apply — the option, or the one already stored. */
+function resolveRequestedMode(
+  interaction: ChatInputCommandInteraction,
+  previous: ReturnType<typeof getVerificationConfig>,
+): VerificationMode {
+  const requestedMode = interaction.options.getString("mode");
+  if (requestedMode === "code" || requestedMode === "captcha") return requestedMode;
+  return previous?.verificationMode ?? "captcha";
+}
+
+/**
+ * Store the optional banner image (upload wins over URL).
+ *
+ * Returns the stored image path, or undefined when the value was rejected —
+ * the reply has been sent in that case.
+ */
+async function resolveStoredBanner(
+  interaction: ChatInputCommandInteraction,
+  current: string | null,
+): Promise<string | null | undefined> {
+  // Optional banner image (upload wins over URL). Uploaded files are
+  // persisted to the local store (like /protectroom) so re-running setup
+  // keeps showing the banner the admin configured last time.
+  const attachment = interaction.options.getAttachment("banner");
+  const resolved = resolvePanelImageInput(
+    attachment
+      ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType, size: attachment.size }
+      : null,
+    interaction.options.getString("banner_url"),
+  );
+  if (resolved.error) {
+    await interaction.editReply(resolved.error);
+    return undefined;
+  }
+
+  if (resolved.image?.kind === "attachment") {
+    try {
+      return await persistPanelImageFromUrl(resolved.image.url, resolved.image.filename, {
+        contentType: attachment?.contentType,
+        scope: "verify",
+      });
+    } catch (e) {
+      await interaction.editReply(errorMessage(e) ?? "❌ Could not save the image");
+      return undefined;
+    }
+  }
+  if (resolved.image?.kind === "url") {
+    return resolved.image.url;
+  }
+  return current;
+}
+
+/** The confirmation text of a successful setup. */
+function buildSetupReply(opts: {
+  mode: VerificationMode;
+  verifiedRole: Role | APIRole;
+  unverifiedRole: Role | APIRole | null;
+  targetChannel: { id: string };
+}): string {
+  const roleList = opts.unverifiedRole
+    ? `✅ Grant: ${opts.verifiedRole}\n🚫 Remove: ${opts.unverifiedRole}`
+    : `✅ Grant: ${opts.verifiedRole}`;
+  const modeLine =
+    opts.mode === "code"
+      ? "🔑 Mode: **Code** — `?inv` now includes one single-use code per invite"
+      : "🔐 Mode: **Captcha** — users solve an image code";
+  const codeHint =
+    opts.mode === "code"
+      ? "\n💡 A member must send the invited user both the invite link and its code." +
+        "\n🔒 Run `?inv` where only trusted members can read the channel."
+      : "";
+
+  return (
+    `✅ Verification system set up!\n${modeLine}\n${roleList}` +
+    `\n📨 Verification panel sent to ${opts.targetChannel}${codeHint}`
+  );
+}
+
+/** /verify remove — turn the verification system off. */
+async function verifyRemove(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    return interaction.reply({ content: "❌ This can only be used in a server", flags: MessageFlags.Ephemeral });
+  }
+
+  const existing = getVerificationConfig(interaction.guildId);
+  if (!existing) {
     return interaction.reply({
-      content: "✅ Verification system disabled",
+      content: "❌ No verification system is configured in this server",
       flags: MessageFlags.Ephemeral,
     });
   }
+
+  disableVerificationConfig(interaction.guildId);
+  deleteInviteCodesForGuild(interaction.guildId);
+  deleteLocalPanelImage(existing.imageUrl);
+  return interaction.reply({
+    content: "✅ Verification system disabled",
+    flags: MessageFlags.Ephemeral,
+  });
 }

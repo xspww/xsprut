@@ -118,32 +118,8 @@ export async function setProtectRoom(
     });
   }
 
-  // ─── Optional banner image (upload wins over URL) ──────────────────────
-  const attachment = interaction.options.getAttachment("banner");
-  const imageUrlOption = interaction.options.getString("banner_url");
-  const resolved = resolvePanelImageInput(
-    attachment
-      ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType, size: attachment.size }
-      : null,
-    imageUrlOption,
-  );
-  if (resolved.error) {
-    return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
-  }
-  let storedImage: string | null = null;
-  if (resolved.image?.kind === "attachment") {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      storedImage = await persistPanelImageFromUrl(resolved.image.url, resolved.image.filename, {
-        contentType: attachment?.contentType,
-        scope: "protect",
-      });
-    } catch (e) {
-      return interaction.editReply(errorMessage(e) ?? "❌ Could not save the image");
-    }
-  } else if (resolved.image?.kind === "url") {
-    storedImage = resolved.image.url;
-  }
+  const storedImage = await resolveStoredBanner(interaction);
+  if (storedImage === undefined) return;
 
   db.prepare("INSERT INTO protectedRooms (guildId, channelId, actionType, timeoutDuration, imageUrl, createdAt) VALUES (?, ?, ?, ?, ?, ?)")
     .run(interaction.guildId, interaction.channelId, action, timeoutDuration, storedImage, Date.now());
@@ -180,6 +156,46 @@ export async function setProtectRoom(
     return interaction.editReply({ embeds: [embed] });
   }
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
+/**
+ * Store the optional banner image (upload wins over URL).
+ *
+ * Returns the stored image path, or undefined when the value was rejected —
+ * the reply has been sent in that case.
+ */
+async function resolveStoredBanner(
+  interaction: ChatInputCommandInteraction,
+): Promise<string | null | undefined> {
+  const attachment = interaction.options.getAttachment("banner");
+  const imageUrlOption = interaction.options.getString("banner_url");
+  const resolved = resolvePanelImageInput(
+    attachment
+      ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType, size: attachment.size }
+      : null,
+    imageUrlOption,
+  );
+  if (resolved.error) {
+    await interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+    return undefined;
+  }
+
+  if (resolved.image?.kind === "attachment") {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      return await persistPanelImageFromUrl(resolved.image.url, resolved.image.filename, {
+        contentType: attachment?.contentType,
+        scope: "protect",
+      });
+    } catch (e) {
+      await interaction.editReply(errorMessage(e) ?? "❌ Could not save the image");
+      return undefined;
+    }
+  }
+  if (resolved.image?.kind === "url") {
+    return resolved.image.url;
+  }
+  return null;
 }
 
 export async function removeProtectRoom(interaction: ChatInputCommandInteraction) {

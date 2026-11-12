@@ -92,48 +92,64 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     interaction.options.getChannel("channel", false)?.id ??
     interaction.channelId;
 
-  if (subcommand === "add") {
-    const message = interaction.options.getString("message") ?? "";
+  switch (subcommand) {
+    case "add":
+      return robloxAlertAdd(interaction, robloxChannel, targetChannelId);
+    case "remove":
+      return robloxAlertRemove(interaction, robloxChannel, targetChannelId);
+    default:
+      // subcommand === "list"
+      return robloxAlertList(interaction);
+  }
+}
 
-    const botMember = interaction.guild?.members.me;
-    if (!botMember) {
-      return interaction.reply({
-        content: "❌ Could not verify the bot's permissions in this channel",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+/** /robloxalert add — post a message in this channel when Roblox updates. */
+async function robloxAlertAdd(
+  interaction: ChatInputCommandInteraction,
+  robloxChannel: string,
+  targetChannelId: string,
+) {
+  const message = interaction.options.getString("message") ?? "";
 
-    // Resolve the target channel (an option channel may not be in the client
-    // cache yet, so fall back to fetching it).
-    let targetChannel =
-      interaction.guild.channels.cache.get(targetChannelId) ?? null;
-    if (!targetChannel) {
-      targetChannel = await interaction.guild.channels
-        .fetch(targetChannelId)
-        .catch(() => null);
-    }
+  const botMember = interaction.guild?.members.me;
+  if (!botMember) {
+    return interaction.reply({
+      content: "❌ Could not verify the bot's permissions in this channel",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
-    if (!targetChannel || !targetChannel.isTextBased()) {
-      return interaction.reply({
-        content: "❌ Only text channels can be used",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+  // Resolve the target channel (an option channel may not be in the client
+  // cache yet, so fall back to fetching it).
+  let targetChannel =
+    interaction.guild!.channels.cache.get(targetChannelId) ?? null;
+  if (!targetChannel) {
+    targetChannel = await interaction.guild!.channels
+      .fetch(targetChannelId)
+      .catch(() => null);
+  }
 
-    const permissions = targetChannel.permissionsFor(botMember);
-    if (
-      !permissions?.has(PermissionFlagsBits.ViewChannel) ||
-      !permissions?.has(PermissionFlagsBits.SendMessages)
-    ) {
-      return interaction.reply({
-        content:
-          "❌ The bot lacks **View Channel** and **Send Messages** permissions in that channel. Please grant them before enabling alerts",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+  if (!targetChannel || !targetChannel.isTextBased()) {
+    return interaction.reply({
+      content: "❌ Only text channels can be used",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
-    db.prepare(
-      `
+  const permissions = targetChannel.permissionsFor(botMember);
+  if (
+    !permissions?.has(PermissionFlagsBits.ViewChannel) ||
+    !permissions?.has(PermissionFlagsBits.SendMessages)
+  ) {
+    return interaction.reply({
+      content:
+        "❌ The bot lacks **View Channel** and **Send Messages** permissions in that channel. Please grant them before enabling alerts",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  db.prepare(
+    `
       INSERT INTO alerts (
         channelId,
         guildId,
@@ -146,66 +162,71 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         customContent = excluded.customContent,
         enabled = 1
     `,
-    ).run(targetChannelId, interaction.guildId, robloxChannel, message);
-    invalidateAlerts();
+  ).run(targetChannelId, interaction.guildId, robloxChannel, message);
+  invalidateAlerts();
 
-    return interaction.reply({
-      content: `✅ Alerts for **${robloxChannel}** enabled in <#${targetChannelId}>`,
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  return interaction.reply({
+    content: `✅ Alerts for **${robloxChannel}** enabled in <#${targetChannelId}>`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
 
-  if (subcommand === "remove") {
-    const result = db
-      .prepare(
-        `
+/** /robloxalert remove — stop posting in this channel. */
+async function robloxAlertRemove(
+  interaction: ChatInputCommandInteraction,
+  robloxChannel: string,
+  targetChannelId: string,
+) {
+  const result = db
+    .prepare(
+      `
       DELETE FROM alerts
       WHERE channelId = ?
       AND robloxChannel = ?
     `,
-      )
-      .run(targetChannelId, robloxChannel);
-    invalidateAlerts();
+    )
+    .run(targetChannelId, robloxChannel);
+  invalidateAlerts();
 
-    return interaction.reply({
-      content: result.changes
-        ? `✅ Alerts for **${robloxChannel}** disabled in <#${targetChannelId}>`
-        : "ℹ️ No alerts found in this channel",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  return interaction.reply({
+    content: result.changes
+      ? `✅ Alerts for **${robloxChannel}** disabled in <#${targetChannelId}>`
+      : "ℹ️ No alerts found in this channel",
+    flags: MessageFlags.Ephemeral,
+  });
+}
 
-  if (subcommand === "list") {
-    const alerts = db
-      .prepare(
-        `
+/** /robloxalert list — show the alerts set up in this server. */
+async function robloxAlertList(interaction: ChatInputCommandInteraction) {
+  const alerts = db
+    .prepare(
+      `
       SELECT channelId, robloxChannel, customContent
       FROM alerts
       WHERE guildId = ?
       AND enabled = 1
     `,
-      )
-      .all(interaction.guildId) as {
-      channelId: string;
-      robloxChannel: string;
-      customContent: string;
-    }[];
+    )
+    .all(interaction.guildId) as {
+    channelId: string;
+    robloxChannel: string;
+    customContent: string;
+  }[];
 
-    if (alerts.length === 0) {
-      return interaction.reply({
-        content: "ℹ️ No alerts have been set up yet",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
+  if (alerts.length === 0) {
     return interaction.reply({
-      content: alerts
-        .map(
-          (alert) =>
-            `• **${alert.robloxChannel}** → <#${alert.channelId}>${alert.customContent ? ` (message: ${alert.customContent})` : ""}`,
-        )
-        .join("\n"),
+      content: "ℹ️ No alerts have been set up yet",
       flags: MessageFlags.Ephemeral,
     });
   }
+
+  return interaction.reply({
+    content: alerts
+      .map(
+        (alert) =>
+          `• **${alert.robloxChannel}** → <#${alert.channelId}>${alert.customContent ? ` (message: ${alert.customContent})` : ""}`,
+      )
+      .join("\n"),
+    flags: MessageFlags.Ephemeral,
+  });
 }

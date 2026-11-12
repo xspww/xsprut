@@ -78,34 +78,8 @@ export async function handleProtectedRoomViolation(
       return;
     }
 
-    // Skip protection for Guild Owner or Administrator
-    if (
-      message.guild!.ownerId === message.author.id ||
-      member.permissions.has(PermissionFlagsBits.Administrator)
-    ) {
-      logger.info(
-        `[PROTECT] Skipped protection for ${message.author.tag} in guild ${message.guildId}`,
-      );
-      return;
-    }
-
-    // A second message from the same offender arriving while the first
-    // punish is still in flight must not double-punish / double-count.
-    // Check-AND-set here is atomic (no await between them), so two
-    // concurrent handlers can't both slip through. Cleared on every
-    // failure return below so a failed punish doesn't suppress retries.
-    const guardUntil = punishGuardUntil.get(scopeKey);
-    if (guardUntil !== undefined && Date.now() < guardUntil) {
-      logger.info(
-        `[PROTECT] Punish already in flight for ${message.author.tag} in guild ${message.guildId} — skipping duplicate`,
-      );
-      return;
-    }
-    punishGuardUntil.set(scopeKey, Date.now() + PUNISH_GUARD_MS);
-
-    // Get protected room settings (from the DB cache — row was fetched
-    // above for the isProtected check, so no extra query).
-    const protectedRoom = getProtectedRoom(message.guildId!, message.channelId)! as ProtectedRoomRow;
+    const protectedRoom = claimPunishRight(message, member, scopeKey);
+    if (!protectedRoom) return;
 
     // Check the bot has the right permission for the configured action
     const botMember = await message.guild!.members.fetchMe();
@@ -159,6 +133,48 @@ async function resolveMember(message: Message): Promise<GuildMember | null> {
     }
   }
   return member;
+}
+
+/**
+ * Decide whether this message may be punished, and claim that right.
+ *
+ * Returns the protected-room settings when the punishment may go ahead, or
+ * null when it must be skipped (staff member, punish already in flight).
+ * Claiming the right is atomic — no await between the check and the set — so
+ * two concurrent handlers cannot both slip through.
+ */
+function claimPunishRight(
+  message: Message,
+  member: GuildMember,
+  scopeKey: string,
+): ProtectedRoomRow | null {
+  // Skip protection for Guild Owner or Administrator
+  if (
+    message.guild!.ownerId === message.author.id ||
+    member.permissions.has(PermissionFlagsBits.Administrator)
+  ) {
+    logger.info(
+      `[PROTECT] Skipped protection for ${message.author.tag} in guild ${message.guildId}`,
+    );
+    return null;
+  }
+
+  // A second message from the same offender arriving while the first
+  // punish is still in flight must not double-punish / double-count.
+  // Cleared on every failure return below so a failed punish doesn't
+  // suppress retries.
+  const guardUntil = punishGuardUntil.get(scopeKey);
+  if (guardUntil !== undefined && Date.now() < guardUntil) {
+    logger.info(
+      `[PROTECT] Punish already in flight for ${message.author.tag} in guild ${message.guildId} — skipping duplicate`,
+    );
+    return null;
+  }
+  punishGuardUntil.set(scopeKey, Date.now() + PUNISH_GUARD_MS);
+
+  // Get protected room settings (from the DB cache — row was fetched
+  // above for the isProtected check, so no extra query).
+  return getProtectedRoom(message.guildId!, message.channelId)! as ProtectedRoomRow;
 }
 
 /**

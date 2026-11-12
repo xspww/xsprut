@@ -66,91 +66,104 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (denied) return denied;
 
   const guildId = interaction.guildId!;
-  const subcommand = interaction.options.getSubcommand();
 
-  if (subcommand === "add") {
-    const rawId = interaction.options.getString("bot_id", true).trim();
-
-    if (!SNOWFLAKE_REGEX.test(rawId)) {
-      return interaction.reply({
-        content: "❌ `bot_id` must be a Discord ID (17–19 digits)",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    // Try to verify the user actually exists and is a bot.
-    let isBot: boolean | null = null;
-    try {
-      const fetched = await client.users.fetch(rawId);
-      isBot = fetched.bot ?? false;
-    } catch {
-      // Unknown user — still allow saving (admin may know something we don't).
-      isBot = null;
-    }
-
-    if (isBot === false) {
-      return interaction.reply({
-        content: `⚠️ <@${rawId}> is not a bot — please check the ID and try again`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    const existing = db
-      .prepare("SELECT 1 FROM allowedBots WHERE guildId = ? AND botId = ?")
-      .get(guildId, rawId);
-
-    if (existing) {
-      return interaction.reply({
-        content: `ℹ️ Bot <@${rawId}> is already in this server's allowlist`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    db.prepare("INSERT INTO allowedBots (guildId, botId, addedBy, addedAt) VALUES (?, ?, ?, ?)")
-      .run(guildId, rawId, interaction.user.id, Date.now());
-
-    const embed = new EmbedBuilder()
-      .setColor(0x22c55e)
-      .setTitle("✅ Bot added to the allowlist")
-      .setDescription(
-        `Bot <@${rawId}> is now allowed to join this server\n\n` +
-          `**Bot ID:** \`${rawId}\`\n` +
-          `**Added by:** <@${interaction.user.id}>`,
-      )
-      .setFooter({ text: "Diff Team" })
-      .setTimestamp();
-
-    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  switch (interaction.options.getSubcommand()) {
+    case "add":
+      return whitelistAdd(interaction, guildId);
+    case "remove":
+      return whitelistRemove(interaction, guildId);
+    default:
+      // subcommand === "list"
+      return whitelistList(interaction, guildId);
   }
+}
 
-  if (subcommand === "remove") {
-    const rawId = interaction.options.getString("bot_id", true).trim();
+/** /whitelist add — allow a bot to join this server. */
+async function whitelistAdd(interaction: ChatInputCommandInteraction, guildId: string) {
+  const rawId = interaction.options.getString("bot_id", true).trim();
 
-    if (!SNOWFLAKE_REGEX.test(rawId)) {
-      return interaction.reply({
-        content: "❌ `bot_id` must be a Discord ID (17–19 digits)",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    const result = db
-      .prepare("DELETE FROM allowedBots WHERE guildId = ? AND botId = ?")
-      .run(guildId, rawId);
-
-    if (result.changes === 0) {
-      return interaction.reply({
-        content: `ℹ️ Bot <@${rawId}> was not found in this server's allowlist`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
+  if (!SNOWFLAKE_REGEX.test(rawId)) {
     return interaction.reply({
-      content: `✅ Bot <@${rawId}> removed from the allowlist — the next time this bot tries to join the server it will be kicked automatically`,
+      content: "❌ `bot_id` must be a Discord ID (17–19 digits)",
       flags: MessageFlags.Ephemeral,
     });
   }
 
-  // subcommand === "list"
+  // Try to verify the user actually exists and is a bot.
+  let isBot: boolean | null = null;
+  try {
+    const fetched = await client.users.fetch(rawId);
+    isBot = fetched.bot ?? false;
+  } catch {
+    // Unknown user — still allow saving (admin may know something we don't).
+    isBot = null;
+  }
+
+  if (isBot === false) {
+    return interaction.reply({
+      content: `⚠️ <@${rawId}> is not a bot — please check the ID and try again`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const existing = db
+    .prepare("SELECT 1 FROM allowedBots WHERE guildId = ? AND botId = ?")
+    .get(guildId, rawId);
+
+  if (existing) {
+    return interaction.reply({
+      content: `ℹ️ Bot <@${rawId}> is already in this server's allowlist`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  db.prepare("INSERT INTO allowedBots (guildId, botId, addedBy, addedAt) VALUES (?, ?, ?, ?)")
+    .run(guildId, rawId, interaction.user.id, Date.now());
+
+  const embed = new EmbedBuilder()
+    .setColor(0x22c55e)
+    .setTitle("✅ Bot added to the allowlist")
+    .setDescription(
+      `Bot <@${rawId}> is now allowed to join this server\n\n` +
+        `**Bot ID:** \`${rawId}\`\n` +
+        `**Added by:** <@${interaction.user.id}>`,
+    )
+    .setFooter({ text: "Diff Team" })
+    .setTimestamp();
+
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
+/** /whitelist remove — kick the bot the next time it tries to join. */
+async function whitelistRemove(interaction: ChatInputCommandInteraction, guildId: string) {
+  const rawId = interaction.options.getString("bot_id", true).trim();
+
+  if (!SNOWFLAKE_REGEX.test(rawId)) {
+    return interaction.reply({
+      content: "❌ `bot_id` must be a Discord ID (17–19 digits)",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const result = db
+    .prepare("DELETE FROM allowedBots WHERE guildId = ? AND botId = ?")
+    .run(guildId, rawId);
+
+  if (result.changes === 0) {
+    return interaction.reply({
+      content: `ℹ️ Bot <@${rawId}> was not found in this server's allowlist`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Bot <@${rawId}> removed from the allowlist — the next time this bot tries to join the server it will be kicked automatically`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+/** /whitelist list — show the allowed bots. */
+async function whitelistList(interaction: ChatInputCommandInteraction, guildId: string) {
   const rows = db
     .prepare("SELECT botId, addedBy, addedAt FROM allowedBots WHERE guildId = ? ORDER BY addedAt DESC")
     .all(guildId) as { botId: string; addedBy: string; addedAt: number }[];

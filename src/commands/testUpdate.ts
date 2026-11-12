@@ -68,147 +68,164 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const type = interaction.options.getString("alert_type", true);
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  if (type === "roblox-live") {
-    const real = await fetchRealVersionData("LIVE");
-    if (!real) {
-      return interaction.editReply("❌ Could not fetch version info right now, please try again later");
-    }
-    const { hash, version } = real;
-    const configured = getAlerts("LIVE", interaction.guildId ?? undefined);
-    if (configured.length === 0) {
-      return interaction.editReply(
-        "⚠️ No channel is configured to receive Roblox updates \n\n" +
-          "The bot will **not send any message** when Roblox updates because no alert is configured\n" +
-          "Run this command in the channel you want to receive alerts in: `/robloxalert add roblox_channel:LIVE`, then try `/test` again",
-      );
-    }
-    await sendUpdate(hash, "LIVE", version, interaction.guildId ?? undefined);
+  switch (type) {
+    case "roblox-live":
+      return testRobloxLive(interaction);
+    case "roblox-zbeta":
+      return testRobloxZbeta(interaction);
+    case "executor-alert":
+      return testExecutorAlert(interaction);
+    case "joinalert":
+      return testJoinAlert(interaction);
+    default:
+      return interaction.editReply(`❌ Unknown alert type \`${type}\``);
+  }
+}
+
+/** /test roblox-live — send a real Roblox LIVE update to the alert channels. */
+async function testRobloxLive(interaction: ChatInputCommandInteraction) {
+  const real = await fetchRealVersionData("LIVE");
+  if (!real) {
+    return interaction.editReply("❌ Could not fetch version info right now, please try again later");
+  }
+  const { hash, version } = real;
+  const configured = getAlerts("LIVE", interaction.guildId ?? undefined);
+  if (configured.length === 0) {
     return interaction.editReply(
-      `✅ Test **Roblox LIVE Update** message sent with the real version \`${hash}\``,
+      "⚠️ No channel is configured to receive Roblox updates \n\n" +
+        "The bot will **not send any message** when Roblox updates because no alert is configured\n" +
+        "Run this command in the channel you want to receive alerts in: `/robloxalert add roblox_channel:LIVE`, then try `/test` again",
     );
   }
+  await sendUpdate(hash, "LIVE", version, interaction.guildId ?? undefined);
+  return interaction.editReply(
+    `✅ Test **Roblox LIVE Update** message sent with the real version \`${hash}\``,
+  );
+}
 
-  if (type === "roblox-zbeta") {
-    const real = await fetchRealVersionData("ZBeta");
-    if (!real) {
-      return interaction.editReply("❌ Could not fetch version info right now, please try again later");
-    }
-    const { hash, version } = real;
-    const configured = getAlerts("ZBeta", interaction.guildId ?? undefined);
-    if (configured.length === 0) {
-      return interaction.editReply(
-        "⚠️ No channel is configured to receive ZBeta — use `/robloxalert add roblox_channel:ZBeta` first, then try `/test` again",
-      );
-    }
-    await sendPreUpdate(hash, "ZBeta", version, interaction.guildId ?? undefined);
+/** /test roblox-zbeta — send a real Roblox ZBeta update to the alert channels. */
+async function testRobloxZbeta(interaction: ChatInputCommandInteraction) {
+  const real = await fetchRealVersionData("ZBeta");
+  if (!real) {
+    return interaction.editReply("❌ Could not fetch version info right now, please try again later");
+  }
+  const { hash, version } = real;
+  const configured = getAlerts("ZBeta", interaction.guildId ?? undefined);
+  if (configured.length === 0) {
     return interaction.editReply(
-      `✅ Test **Roblox ZBeta Update** message sent with the real version \`${hash}\``,
+      "⚠️ No channel is configured to receive ZBeta — use `/robloxalert add roblox_channel:ZBeta` first, then try `/test` again",
     );
   }
+  await sendPreUpdate(hash, "ZBeta", version, interaction.guildId ?? undefined);
+  return interaction.editReply(
+    `✅ Test **Roblox ZBeta Update** message sent with the real version \`${hash}\``,
+  );
+}
 
-  if (type === "executor-alert") {
-    const exploits = await fetchExecutorData();
-    const realVersion = await fetchRealVersionData("LIVE");
-    const robloxVersion = realVersion?.hash ?? "N/A";
+/** /test executor-alert — send an executor update to this server's channels. */
+async function testExecutorAlert(interaction: ChatInputCommandInteraction) {
+  const exploits = await fetchExecutorData();
+  const realVersion = await fetchRealVersionData("LIVE");
+  const robloxVersion = realVersion?.hash ?? "N/A";
 
-    // Check if configured alert channels exist in this server (guild)
-    const configuredAlerts = db
-      .prepare(
-        `SELECT channelId, executorName, displayName FROM executorAlerts WHERE guildId = ? AND enabled = 1`,
-      )
-      .all(interaction.guildId) as { channelId: string; executorName: string; displayName: string }[];
+  // Check if configured alert channels exist in this server (guild)
+  const configuredAlerts = db
+    .prepare(
+      `SELECT channelId, executorName, displayName FROM executorAlerts WHERE guildId = ? AND enabled = 1`,
+    )
+    .all(interaction.guildId) as { channelId: string; executorName: string; displayName: string }[];
 
-    if (configuredAlerts.length > 0) {
-      // Send to configured alert channels, but restrict to this guild only by passing guildId
-      for (const alert of configuredAlerts) {
-        const matchingExploit = exploits.find(
-          (e) => e.title?.toLowerCase() === alert.executorName.toLowerCase(),
-        );
-
-        // Preview only — when WEAO has no data for this executor, keep the real
-        // display name but leave the version empty (rendered as "N/A") instead
-        // of inventing a fake one.
-        const exploitData: WeaoExploit = matchingExploit
-          ? { ...matchingExploit, title: alert.displayName, updateStatus: true }
-          : { title: alert.displayName, updateStatus: true };
-
-        // Pass interaction.guildId to ensure sendExecutorUpdateAlert only targets channels in this guild
-        await sendExecutorUpdateAlert(exploitData, robloxVersion, alert.executorName, interaction.guildId ?? undefined);
-      }
-
-      return interaction.editReply(
-        `✅ Test **Executor Alert** message sent to the configured alert channels (${configuredAlerts.length} entries) in this server`,
+  if (configuredAlerts.length > 0) {
+    // Send to configured alert channels, but restrict to this guild only by passing guildId
+    for (const alert of configuredAlerts) {
+      const matchingExploit = exploits.find(
+        (e) => e.title?.toLowerCase() === alert.executorName.toLowerCase(),
       );
+
+      // Preview only — when WEAO has no data for this executor, keep the real
+      // display name but leave the version empty (rendered as "N/A") instead
+      // of inventing a fake one.
+      const exploitData: WeaoExploit = matchingExploit
+        ? { ...matchingExploit, title: alert.displayName, updateStatus: true }
+        : { title: alert.displayName, updateStatus: true };
+
+      // Pass interaction.guildId to ensure sendExecutorUpdateAlert only targets channels in this guild
+      await sendExecutorUpdateAlert(exploitData, robloxVersion, alert.executorName, interaction.guildId ?? undefined);
     }
 
-    // No configured alerts — preview in the current channel using a real WEAO
-    // entry. Never fabricate an executor or version: if WEAO is unreachable,
-    // report it instead of sending a fake alert.
-    const workingSample = exploits.find(
-      (e): e is WeaoExploit & { title: string; version: string } => Boolean(e.title && e.version),
+    return interaction.editReply(
+      `✅ Test **Executor Alert** message sent to the configured alert channels (${configuredAlerts.length} entries) in this server`,
     );
-    if (!workingSample) {
-      return interaction.editReply("❌ Could not fetch executor data right now, please try again later");
-    }
-
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const verDisplay = workingSample.version.trim();
-
-    const container = createExecutorUpdateContainer({
-      displayName: workingSample.title,
-      verDisplay,
-      robloxVersion,
-      banwaveText: formatLastBanwave(workingSample.detectionReason),
-      nowUnix,
-      logoUrl: workingSample.slug?.logo,
-    });
-
-    const ch = interaction.channel;
-    if (ch?.isTextBased() && ch.isSendable()) {
-      await ch.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
-      return interaction.editReply(`✅ Test **Executor Alert** (${workingSample.title}) message sent in this channel`);
-    }
-
-    return interaction.editReply(`❌ Unable to send a message to this channel`);
   }
 
-  if (type === "joinalert") {
-    // Send to the configured join-alert channel for this guild when set,
-    // otherwise fall back to the channel where the command was used.
-    const cfg = db
-      .prepare(
-        `SELECT channelId, customMessage FROM memberJoinAlerts WHERE guildId = ? AND enabled = 1`,
-      )
-      .get(interaction.guildId) as { channelId: string; customMessage: string } | undefined;
-
-    let target = interaction.channel;
-    if (cfg) {
-      try {
-        const fetched = await interaction.guild?.channels.fetch(cfg.channelId);
-        if (fetched?.isTextBased()) target = fetched;
-      } catch {
-        // Channel gone — fall back to the current channel.
-      }
-    }
-
-    if (!target?.isTextBased() || !target.isSendable()) {
-      return interaction.editReply("❌ Unable to send a message to this channel");
-    }
-
-    const me = interaction.user;
-    const container = createJoinAlertContainer({
-      username: me.username,
-      avatarUrl: me.displayAvatarURL(),
-      accountCreatedUnix: Math.floor(me.createdTimestamp / 1000),
-    });
-
-    // Same top text as the real welcome: mention (pings only the tester) + custom message.
-    const content = `<@${me.id}>${cfg?.customMessage ? ` ${cfg.customMessage}` : ""}`;
-    await sendV2Message(target, [container], content, {
-      allowedMentions: { users: [me.id] },
-    });
-
-    const where = cfg ? `<#${cfg.channelId}>` : "this channel";
-    return interaction.editReply(`✅ Test **Join Alert** message sent in ${where}`);
+  // No configured alerts — preview in the current channel using a real WEAO
+  // entry. Never fabricate an executor or version: if WEAO is unreachable,
+  // report it instead of sending a fake alert.
+  const workingSample = exploits.find(
+    (e): e is WeaoExploit & { title: string; version: string } => Boolean(e.title && e.version),
+  );
+  if (!workingSample) {
+    return interaction.editReply("❌ Could not fetch executor data right now, please try again later");
   }
+
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const verDisplay = workingSample.version.trim();
+
+  const container = createExecutorUpdateContainer({
+    displayName: workingSample.title,
+    verDisplay,
+    robloxVersion,
+    banwaveText: formatLastBanwave(workingSample.detectionReason),
+    nowUnix,
+    logoUrl: workingSample.slug?.logo,
+  });
+
+  const ch = interaction.channel;
+  if (ch?.isTextBased() && ch.isSendable()) {
+    await ch.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+    return interaction.editReply(`✅ Test **Executor Alert** (${workingSample.title}) message sent in this channel`);
+  }
+
+  return interaction.editReply(`❌ Unable to send a message to this channel`);
+}
+
+/** /test joinalert — send the welcome message to the join-alert channel. */
+async function testJoinAlert(interaction: ChatInputCommandInteraction) {
+  // Send to the configured join-alert channel for this guild when set,
+  // otherwise fall back to the channel where the command was used.
+  const cfg = db
+    .prepare(
+      `SELECT channelId, customMessage FROM memberJoinAlerts WHERE guildId = ? AND enabled = 1`,
+    )
+    .get(interaction.guildId) as { channelId: string; customMessage: string } | undefined;
+
+  let target = interaction.channel;
+  if (cfg) {
+    try {
+      const fetched = await interaction.guild?.channels.fetch(cfg.channelId);
+      if (fetched?.isTextBased()) target = fetched;
+    } catch {
+      // Channel gone — fall back to the current channel.
+    }
+  }
+
+  if (!target?.isTextBased() || !target.isSendable()) {
+    return interaction.editReply("❌ Unable to send a message to this channel");
+  }
+
+  const me = interaction.user;
+  const container = createJoinAlertContainer({
+    username: me.username,
+    avatarUrl: me.displayAvatarURL(),
+    accountCreatedUnix: Math.floor(me.createdTimestamp / 1000),
+  });
+
+  // Same top text as the real welcome: mention (pings only the tester) + custom message.
+  const content = `<@${me.id}>${cfg?.customMessage ? ` ${cfg.customMessage}` : ""}`;
+  await sendV2Message(target, [container], content, {
+    allowedMentions: { users: [me.id] },
+  });
+
+  const where = cfg ? `<#${cfg.channelId}>` : "this channel";
+  return interaction.editReply(`✅ Test **Join Alert** message sent in ${where}`);
 }

@@ -15,39 +15,53 @@ export async function execute(member: GuildMember) {
   // If the joining member is a bot, only let it stay if its ID is in the
   // guild-scoped allowlist. Otherwise, kick it immediately.
   if (member.user?.bot) {
-    const allowed = db
-      .prepare(
-        "SELECT 1 FROM allowedBots WHERE guildId = ? AND botId = ?",
-      )
-      .get(guildId, member.id);
-
-    if (!allowed) {
-      const botMember = member.guild.members.me;
-      if (!botMember?.permissions.has(PermissionsBitField.Flags.KickMembers)) {
-        logger.warn(
-          `[BOT-GUARD] Cannot kick unauthorized bot ${member.id} in guild ${guildId} — missing Kick Members permission`,
-        );
-        return;
-      }
-
-      try {
-        await member.kick("Unauthorized bot — not in allowlist");
-        logger.warn(
-          `[BOT-GUARD] Kicked unauthorized bot ${member.user.tag} (${member.id}) from guild ${guildId}`,
-        );
-      } catch (err) {
-        logger.warn(
-          `[BOT-GUARD] Failed to kick bot ${member.id} in guild ${guildId}: ${err}`,
-        );
-      }
-      return;
-    }
-
-    // Bot is allowed — don't trigger member join alerts for bots.
+    await enforceBotAllowlist(member, guildId);
     return;
   }
   // ────────────────────────────────────────────────────────────────────────
 
+  await sendJoinAlert(member, guildId);
+}
+
+/**
+ * Kick a bot that is not on the guild's allowlist.
+ *
+ * A bot on the allowlist stays — and does not trigger a join alert.
+ */
+async function enforceBotAllowlist(member: GuildMember, guildId: string) {
+  const allowed = db
+    .prepare(
+      "SELECT 1 FROM allowedBots WHERE guildId = ? AND botId = ?",
+    )
+    .get(guildId, member.id);
+
+  if (allowed) {
+    // Bot is allowed — don't trigger member join alerts for bots.
+    return;
+  }
+
+  const botMember = member.guild.members.me;
+  if (!botMember?.permissions.has(PermissionsBitField.Flags.KickMembers)) {
+    logger.warn(
+      `[BOT-GUARD] Cannot kick unauthorized bot ${member.id} in guild ${guildId} — missing Kick Members permission`,
+    );
+    return;
+  }
+
+  try {
+    await member.kick("Unauthorized bot — not in allowlist");
+    logger.warn(
+      `[BOT-GUARD] Kicked unauthorized bot ${member.user.tag} (${member.id}) from guild ${guildId}`,
+    );
+  } catch (err) {
+    logger.warn(
+      `[BOT-GUARD] Failed to kick bot ${member.id} in guild ${guildId}: ${err}`,
+    );
+  }
+}
+
+/** Greet a new member when the server has a join alert configured. */
+async function sendJoinAlert(member: GuildMember, guildId: string) {
   const config = db
     .prepare(
       `

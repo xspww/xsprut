@@ -154,54 +154,15 @@ export async function checkChannel(channel: RobloxChannel): Promise<boolean> {
   // (no cache): the monitor must see every new hash within one 10s tick.
   const data = await fetchRobloxPrimary(channel);
 
-  let hash = data?.clientVersionUpload;
-  let version = data?.version;
-  let isFallback = false;
-
-  if (!hash && channel === "LIVE") {
-    // Tier 1: WEAO exploits `rbxversion` (majority vote — already fetched every
-    // 60s by the executor monitor, no extra request).
-    const fallback = getWEAORobloxVersion();
-    if (fallback) {
-      hash = fallback;
-      isFallback = true;
-      if (!weaoFallbackActive) {
-        weaoFallbackActive = true;
-        logger.info(
-          "clientsettings.roblox.com unreachable — using WEAO rbxversion as fallback for LIVE detection.",
-        );
-      }
-    }
-
-    // Tier 2: WEAO `api/versions/current` — a dedicated endpoint, independent
-    // of the executor monitor. LIVE-only data, so it is safe here and ONLY
-    // here (see weaoVersions.ts).
-    if (!hash) {
-      const weaoLive = await fetchWeaoCurrentLiveHash();
-      if (weaoLive) {
-        hash = weaoLive;
-        isFallback = true;
-        version = version ?? (await fetchWeaoCurrentLiveVersion());
-        if (!weaoFallbackActive) {
-          weaoFallbackActive = true;
-          logger.info(
-            "clientsettings.roblox.com unreachable — using WEAO versions/current as fallback for LIVE detection.",
-          );
-        }
-      }
-    }
-  } else if (weaoFallbackActive && channel === "LIVE" && hash) {
-    weaoFallbackActive = false;
-    logger.info("clientsettings.roblox.com reachable again — LIVE monitoring back on primary source.");
-  }
-
-  if (!hash) {
+  const resolved = await resolveHash(channel, data);
+  if (!resolved) {
     // Keep blind-skip failures visible: without this, a locked-down channel is
-    // polled every 10s and silently ignored forever (see logMissingHash above).
+    // polled every 10s and silently ignored forever (see logMissingHash below).
     logMissingHash(channel, data);
     missingChannels.add(channel);
     return false;
   }
+  const { hash, version, isFallback } = resolved;
 
   // One-shot recovery notice when a previously blind channel becomes readable
   // again (existing logic below will alert for any unseen hash right away).
@@ -250,47 +211,7 @@ export async function checkChannel(channel: RobloxChannel): Promise<boolean> {
   }
 
   if (channel === "LIVE" && currentState) {
-    const isRevert = currentState.previousVersion === hash;
-
-    // Layer 3 — revert cooldown: the same revert cannot alert twice within
-    // the window. State still flips (DB tracks reality) but Discord is not
-    // spammed when primary itself flaps between two builds for minutes.
-    if (isRevert) {
-      const key = `${channel}:${hash}`;
-      const now = Date.now();
-      const lastAt = lastRevertAlertAt.get(key) ?? 0;
-      updateChannelState(channel, hash, version);
-      if (!versionExists) {
-        addVersion(hash, channel);
-      }
-      markReleasedIfZBetaDetected(hash);
-      if (now - lastAt < REVERT_COOLDOWN_MS) {
-        logger.info(
-          `${channel}: revert to ${hash} suppressed by cooldown (last alert ${Math.round((now - lastAt) / 1000)}s ago).`,
-        );
-        return true;
-      }
-      lastRevertAlertAt.set(key, now);
-      await sendRevert(hash, currentState.currentVersion, channel);
-      return true;
-    }
-
-    updateChannelState(channel, hash, version);
-
-    if (versionExists) {
-      return true;
-    }
-
-    await sendUpdate(hash, channel, version);
-
-    if (!versionExists) {
-      addVersion(hash, channel);
-    }
-
-    // A ZBeta build reaching LIVE means it has been officially released.
-    markReleasedIfZBetaDetected(hash);
-
-    return true;
+    return handleLiveUpdate(channel, hash, version, currentState, versionExists);
   }
 
   if (!versionExists) {
@@ -304,8 +225,115 @@ export async function checkChannel(channel: RobloxChannel): Promise<boolean> {
     }
   }
 
+  updateChannelState(channel, hash, version);
+  return true;
+}
+
+/**
+ * The hash to judge this tick by, or null when the channel is unreadable.
+ *
+ * The primary source is clientsettings.roblox.com. When it is unreachable for
+ * LIVE, two WEAO fallbacks are tried in order.
+ */
+async function resolveHash(
+  channel: RobloxChannel,
+  data: Awaited<ReturnType<typeof fetchRobloxPrimary>>,
+): Promise<{ hash: string; version?: string; isFallback: boolean } | null> {
+  let hash = data?.clientVersionUpload;
+  let version = data?.version;
+  let isFallback = false;
+
+  if (!hash && channel === "LIVE") {
+    // Tier 1: WEAO exploits `rbxversion` (majority vote — already fetched every
+    // 60s by the executor monitor, no extra request).
+    const fallback = getWEAORobloxVersion();
+    if (fallback) {
+      hash = fallback;
+      isFallback = true;
+      if (!weaoFallbackActive) {
+        weaoFallbackActive = true;
+        logger.info(
+          "clientsettings.roblox.com unreachable — using WEAO rbxversion as fallback for LIVE detection.",
+        );
+      }
+    }
+
+    // Tier 2: WEAO `api/versions/current` — a dedicated endpoint, independent
+    // of the executor monitor. LIVE-only data, so it is safe here and ONLY
+    // here (see weaoVersions.ts).
+    if (!hash) {
+      const weaoLive = await fetchWeaoCurrentLiveHash();
+      if (weaoLive) {
+        hash = weaoLive;
+        isFallback = true;
+        version = version ?? (await fetchWeaoCurrentLiveVersion());
+        if (!weaoFallbackActive) {
+          weaoFallbackActive = true;
+          logger.info(
+            "clientsettings.roblox.com unreachable — using WEAO versions/current as fallback for LIVE detection.",
+          );
+        }
+      }
+    }
+  } else if (weaoFallbackActive && channel === "LIVE" && hash) {
+    weaoFallbackActive = false;
+    logger.info("clientsettings.roblox.com reachable again — LIVE monitoring back on primary source.");
+  }
+
+  return hash ? { hash, version, isFallback } : null;
+}
+
+/**
+ * Move LIVE to a new hash, honouring the revert cooldown.
+ *
+ * Layer 3 — revert cooldown: the same revert cannot alert twice within the
+ * window. State still flips (DB tracks reality) but Discord is not spammed
+ * when primary itself flaps between two builds for minutes.
+ */
+async function handleLiveUpdate(
+  channel: RobloxChannel,
+  hash: string,
+  version: string | undefined,
+  currentState: NonNullable<ReturnType<typeof getChannelState>>,
+  versionExists: boolean,
+): Promise<boolean> {
+  const isRevert = currentState.previousVersion === hash;
+
+  if (isRevert) {
+    const key = `${channel}:${hash}`;
+    const now = Date.now();
+    const lastAt = lastRevertAlertAt.get(key) ?? 0;
+    updateChannelState(channel, hash, version);
+    if (!versionExists) {
+      addVersion(hash, channel);
+    }
+    markReleasedIfZBetaDetected(hash);
+    if (now - lastAt < REVERT_COOLDOWN_MS) {
+      logger.info(
+        `${channel}: revert to ${hash} suppressed by cooldown (last alert ${Math.round((now - lastAt) / 1000)}s ago).`,
+      );
+      return true;
+    }
+    lastRevertAlertAt.set(key, now);
+    await sendRevert(hash, currentState.currentVersion, channel);
+    return true;
+  }
 
   updateChannelState(channel, hash, version);
+
+  if (versionExists) {
+    return true;
+  }
+
+  await sendUpdate(hash, channel, version);
+
+  if (!versionExists) {
+    addVersion(hash, channel);
+  }
+
+  // A ZBeta build reaching LIVE means it has been officially released.
+  markReleasedIfZBetaDetected(hash);
+
   return true;
 }
 

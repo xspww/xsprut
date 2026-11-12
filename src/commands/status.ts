@@ -90,86 +90,101 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
-  const subcommand = interaction.options.getSubcommand();
+  switch (interaction.options.getSubcommand()) {
+    case "add":
+      return statusAdd(interaction);
+    case "remove":
+      return statusRemove(interaction);
+    case "refresh":
+      return statusRefresh(interaction);
+    default:
+      // list (formerly view)
+      return statusList(interaction);
+  }
+}
 
-  if (subcommand === "add") {
-    const activityType = normalizeBotActivityType(interaction.options.getString("presence", true));
-    const text = interaction.options.getString("text", true).trim();
-    if (text === "") {
+/** /status add — add a status message to the rotation. */
+async function statusAdd(interaction: ChatInputCommandInteraction) {
+  const activityType = normalizeBotActivityType(interaction.options.getString("presence", true));
+  const text = interaction.options.getString("text", true).trim();
+  if (text === "") {
+    return interaction.reply({
+      content: "❌ Please provide a status message (text)",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  const url = interaction.options.getString("stream_url")?.trim();
+  const custom = interaction.options.getString("custom_status")?.trim();
+
+  const intervalRaw = interaction.options.getString("interval");
+  let intervalMs = STATUS_ROTATION_DEFAULT_INTERVAL_MS;
+  if (intervalRaw) {
+    const parsed = parseIntervalToMs(intervalRaw);
+    if (parsed === null) {
       return interaction.reply({
-        content: "❌ Please provide a status message (text)",
+        content: `❌ Invalid **interval** format (valid examples: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
         flags: MessageFlags.Ephemeral,
       });
     }
-    const url = interaction.options.getString("stream_url")?.trim();
-    const custom = interaction.options.getString("custom_status")?.trim();
-
-    const intervalRaw = interaction.options.getString("interval");
-    let intervalMs = STATUS_ROTATION_DEFAULT_INTERVAL_MS;
-    if (intervalRaw) {
-      const parsed = parseIntervalToMs(intervalRaw);
-      if (parsed === null) {
-        return interaction.reply({
-          content: `❌ Invalid **interval** format (valid examples: \`30s\`, \`1m\`, \`5m\`, \`1h\`)`,
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-      if (parsed < STATUS_ROTATION_MIN_INTERVAL_MS) {
-        return interaction.reply({
-          content: `❌ interval must be at least **${formatIntervalMs(STATUS_ROTATION_MIN_INTERVAL_MS)}**`,
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-      intervalMs = parsed;
+    if (parsed < STATUS_ROTATION_MIN_INTERVAL_MS) {
+      return interaction.reply({
+        content: `❌ interval must be at least **${formatIntervalMs(STATUS_ROTATION_MIN_INTERVAL_MS)}**`,
+        flags: MessageFlags.Ephemeral,
+      });
     }
-
-    addBotStatusMessage(text, url, custom, intervalMs, activityType);
-
-    const count = db
-      .prepare(`SELECT COUNT(*) AS c FROM botStatusMessages WHERE enabled = 1`)
-      .get() as { c: number };
-
-    const rotationNote =
-      count.c > 1
-        ? `\n📋 There are now **${count.c}** status messages in total — they will rotate automatically on schedule`
-        : `\n📋 There is now 1 status message — use /status add to add more so they rotate automatically`;
-
-    // Warn instead of silently dropping a link the user bothered to type.
-    const urlNote =
-      activityType === "online" && url
-        ? `\n⚠️ **url** was ignored because type is **Online** — links only show on Streaming`
-        : "";
-
-    return interaction.reply({
-      content:
-        `✅ Status message added: \`${text}\`` +
-        `\n${ACTIVITY_TYPE_LABELS[activityType] ?? activityType}` +
-        (custom ? `\n💬 Custom Status: \`${custom}\`` : "") +
-        urlNote +
-        `\n⏱️ This message will be shown for **${formatIntervalMs(intervalMs)}** then rotate to the next one${rotationNote}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    intervalMs = parsed;
   }
 
-  if (subcommand === "remove") {
-    resetBotStatus();
+  addBotStatusMessage(text, url, custom, intervalMs, activityType);
 
-    return interaction.reply({
-      content: "✅ All status messages cleared (the bot status has been removed)",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  const count = db
+    .prepare(`SELECT COUNT(*) AS c FROM botStatusMessages WHERE enabled = 1`)
+    .get() as { c: number };
 
-  if (subcommand === "refresh") {
-    refreshBotStatus();
+  const rotationNote =
+    count.c > 1
+      ? `\n📋 There are now **${count.c}** status messages in total — they will rotate automatically on schedule`
+      : `\n📋 There is now 1 status message — use /status add to add more so they rotate automatically`;
 
-    return interaction.reply({
-      content: "✅ Bot status refreshed (now showing the configured message)",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  // Warn instead of silently dropping a link the user bothered to type.
+  const urlNote =
+    activityType === "online" && url
+      ? `\n⚠️ **url** was ignored because type is **Online** — links only show on Streaming`
+      : "";
 
-  // list (formerly view)
+  return interaction.reply({
+    content:
+      `✅ Status message added: \`${text}\`` +
+      `\n${ACTIVITY_TYPE_LABELS[activityType] ?? activityType}` +
+      (custom ? `\n💬 Custom Status: \`${custom}\`` : "") +
+      urlNote +
+      `\n⏱️ This message will be shown for **${formatIntervalMs(intervalMs)}** then rotate to the next one${rotationNote}`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+/** /status remove — clear every status message. */
+async function statusRemove(interaction: ChatInputCommandInteraction) {
+  resetBotStatus();
+
+  return interaction.reply({
+    content: "✅ All status messages cleared (the bot status has been removed)",
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+/** /status refresh — re-apply the configured status right now. */
+async function statusRefresh(interaction: ChatInputCommandInteraction) {
+  refreshBotStatus();
+
+  return interaction.reply({
+    content: "✅ Bot status refreshed (now showing the configured message)",
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+/** /status list — show the configured status messages. */
+async function statusList(interaction: ChatInputCommandInteraction) {
   const messages = db
     .prepare(
       `SELECT activityText, streamUrl, customStatus, intervalMs, activityType

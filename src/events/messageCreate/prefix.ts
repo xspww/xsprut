@@ -10,7 +10,7 @@ import {
 import config from "../../lib/config";
 import logger from "../../lib/logger";
 import { checkCooldown } from "../../lib/cooldown";
-import { getVerificationConfig, createInviteVerificationCode } from "../../lib/verifyManager";
+import { getVerificationConfig, createInviteVerificationCode, type VerificationConfig } from "../../lib/verifyManager";
 import { ROBLOX_CHANNELS } from "../../lib/constants";
 import { getRobloxVersion } from "../../lib/robloxVersion";
 
@@ -81,37 +81,13 @@ async function handleInviteCommand(message: Message): Promise<void> {
   }
 
   try {
-    // Creating an invite needs Create Instant Invite IN THIS CHANNEL —
-    // check the channel overwrite-resolved permissions, not the
-    // guild-wide ones (they can differ per channel).
-    const botMember = await message.guild!.members.fetchMe();
-    const channelPerms = (message.channel as TextChannel).permissionsFor?.(botMember);
-    if (!channelPerms?.has(PermissionFlagsBits.CreateInstantInvite)) {
-      await message.reply("❌ The bot lacks the `Create Instant Invite` permission in this channel");
-      return;
-    }
-
+    // Read the verification config once: the invite and the code it carries
+    // must agree on the mode, and the mode must not change between them.
     const verification = getVerificationConfig(message.guildId!);
-
-    // In Code mode only members who already passed verification (or
-    // admins/the owner) may mint an invite + code. Otherwise an
-    // unverified member could generate a code for themselves and bypass
-    // the gate entirely.
-    if (verification?.verificationMode === "code") {
-      // Fetch instead of trusting the cache: a stale member object could
-      // still list the verified role after staff removed it.
-      const member =
-        (await message.guild!.members.fetch(message.author.id).catch(() => null)) ??
-        message.member;
-      const canInvite =
-        message.guild!.ownerId === message.author.id ||
-        member?.permissions.has(PermissionFlagsBits.Administrator) === true ||
-        member?.roles.cache.has(verification.verifiedRoleId) === true;
-
-      if (!canInvite) {
-        await message.reply("❌ Only verified members can create an invite and verification code");
-        return;
-      }
+    const denial = await checkInviteAllowed(message, verification);
+    if (denial) {
+      await message.reply(denial);
+      return;
     }
 
     const invite = await (message.channel as TextChannel).createInvite({
@@ -129,70 +105,134 @@ async function handleInviteCommand(message: Message): Promise<void> {
     // so the new member cannot slip in unverified.
     let verificationCode: string | null = null;
     if (verification?.verificationMode === "code") {
-      try {
-        const { code } = createInviteVerificationCode({
-          guildId: message.guildId!,
-          channelId: message.channelId,
-          inviterId: message.author.id,
-          inviteCode: invite.code,
-        });
-        verificationCode = code;
-      } catch (codeError) {
-        try {
-          await invite.delete("Could not create a verification code");
-        } catch {
-          // Best-effort: the invite still expires on its own.
-        }
-        throw codeError;
-      }
+      verificationCode = await createCodeForInvite(message, invite.code, invite);
     }
-
-    // Components v2 has no legacy `content` field, so the code can use
-    // headings and stand out instead of being buried in a text line.
-    const container = new ContainerBuilder().setAccentColor(0x22c55e);
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`**🔗 Invite link**\n${invite.url}`),
-    );
-
-    if (verificationCode) {
-      container
-        .addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("## 🔑 Verification code"),
-          new TextDisplayBuilder().setContent(`# \`${verificationCode}\``),
-        );
-    }
-
-    container
-      .addSeparatorComponents(new SeparatorBuilder())
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`,
-        ),
-      );
 
     const reply = await message.reply({
-      components: [container],
+      components: [buildInviteContainer(invite.url, verificationCode)],
       flags: MessageFlags.IsComponentsV2,
     });
-    // Auto-delete the reply AND the command message after 30s so the
-    // invite link doesn't linger in chat. Deleting another user's
-    // message needs Manage Messages — if that fails it's best-effort.
-    const timer = setTimeout(async () => {
-      try {
-        await reply.delete();
-      } catch {
-        // Reply already gone — fine.
-      }
-      try {
-        await message.delete();
-      } catch {
-        // Command message already gone, or bot lacks Manage Messages — fine.
-      }
-    }, 30_000);
-    timer.unref?.();
+    scheduleInviteCleanup(reply, message);
   } catch (error) {
     logger.error("[INV] Failed to handle ?inv:", error);
     await message.reply("❌ Could not create an invite link, please try again later");
   }
+}
+
+/**
+ * Check that the author may create an invite here.
+ *
+ * Returns the reply to send when they may not, or null when they may.
+ */
+async function checkInviteAllowed(
+  message: Message,
+  verification: VerificationConfig | null,
+): Promise<string | null> {
+  // Creating an invite needs Create Instant Invite IN THIS CHANNEL —
+  // check the channel overwrite-resolved permissions, not the
+  // guild-wide ones (they can differ per channel).
+  const botMember = await message.guild!.members.fetchMe();
+  const channelPerms = (message.channel as TextChannel).permissionsFor?.(botMember);
+  if (!channelPerms?.has(PermissionFlagsBits.CreateInstantInvite)) {
+    return "❌ The bot lacks the `Create Instant Invite` permission in this channel";
+  }
+
+  if (verification?.verificationMode !== "code") return null;
+
+  // In Code mode only members who already passed verification (or
+  // admins/the owner) may mint an invite + code. Otherwise an
+  // unverified member could generate a code for themselves and bypass
+  // the gate entirely.
+  // Fetch instead of trusting the cache: a stale member object could
+  // still list the verified role after staff removed it.
+  const member =
+    (await message.guild!.members.fetch(message.author.id).catch(() => null)) ??
+    message.member;
+  const canInvite =
+    message.guild!.ownerId === message.author.id ||
+    member?.permissions.has(PermissionFlagsBits.Administrator) === true ||
+    member?.roles.cache.has(verification.verifiedRoleId) === true;
+
+  return canInvite
+    ? null
+    : "❌ Only verified members can create an invite and verification code";
+}
+
+/**
+ * Mint the single-use verification code for a fresh invite.
+ *
+ * Revokes the invite when the code cannot be created, so the new member
+ * cannot slip in unverified.
+ */
+async function createCodeForInvite(
+  message: Message,
+  inviteCode: string,
+  invite: { delete: (reason?: string) => Promise<unknown> },
+): Promise<string> {
+  try {
+    const { code } = createInviteVerificationCode({
+      guildId: message.guildId!,
+      channelId: message.channelId,
+      inviterId: message.author.id,
+      inviteCode,
+    });
+    return code;
+  } catch (codeError) {
+    try {
+      await invite.delete("Could not create a verification code");
+    } catch {
+      // Best-effort: the invite still expires on its own.
+    }
+    throw codeError;
+  }
+}
+
+/** The Components v2 card that carries the invite link and the code. */
+function buildInviteContainer(inviteUrl: string, verificationCode: string | null) {
+  // Components v2 has no legacy `content` field, so the code can use
+  // headings and stand out instead of being buried in a text line.
+  const container = new ContainerBuilder().setAccentColor(0x22c55e);
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`**🔗 Invite link**\n${inviteUrl}`),
+  );
+
+  if (verificationCode) {
+    container
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("## 🔑 Verification code"),
+        new TextDisplayBuilder().setContent(`# \`${verificationCode}\``),
+      );
+  }
+
+  container
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`,
+      ),
+    );
+
+  return container;
+}
+
+/**
+ * Auto-delete the reply AND the command message after 30s so the invite link
+ * doesn't linger in chat. Deleting another user's message needs Manage
+ * Messages — if that fails it's best-effort.
+ */
+function scheduleInviteCleanup(reply: { delete: () => Promise<unknown> }, message: Message) {
+  const timer = setTimeout(async () => {
+    try {
+      await reply.delete();
+    } catch {
+      // Reply already gone — fine.
+    }
+    try {
+      await message.delete();
+    } catch {
+      // Command message already gone, or bot lacks Manage Messages — fine.
+    }
+  }, 30_000);
+  timer.unref?.();
 }

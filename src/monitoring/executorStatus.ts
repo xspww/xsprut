@@ -18,6 +18,7 @@ import {
   SeparatorBuilder,
   TextDisplayBuilder,
   ThumbnailBuilder,
+  type TextBasedChannel,
 } from "discord.js";
 
 
@@ -546,6 +547,10 @@ export async function updateExecutorEmbedStatusChannels(
  * Render + edit/send a specific set of embed status rows.
  * Used both by the global update path and the per-row scheduler.
  */
+/**
+ * Render + edit/send a specific set of embed status rows.
+ * Used both by the global update path and the per-row scheduler.
+ */
 async function applyEmbedStatusRows(
   rows: EmbedStatusConfig[],
   statusMap: Map<string, WeaoExploit>,
@@ -557,60 +562,7 @@ async function applyEmbedStatusRows(
 
   for (const row of rows) {
     try {
-      const searchKey = normalizeName(row.executorName);
-      const exploit = statusMap.get(searchKey);
-
-      const nowUnix = Math.floor(Date.now() / 1000);
-      const isWorking = exploit?.updateStatus === true;
-      const verDisplay = exploit?.version?.trim() || "N/A";
-      const rbxVerDisplay = exploit?.rbxversion || rbxVer || "N/A";
-      const websiteUrl = exploit?.websitelink?.trim();
-
-      const accentColor = isWorking ? 0x22c55e : 0xef4444;
-
-      // Largest heading (#) so the executor name renders big and bold —
-      // applied to every executor since displayName is uppercased here.
-      const headerText = `# ${row.displayName.toUpperCase()}`;
-      const headerTextDisplay = new TextDisplayBuilder().setContent(headerText);
-
-      const banwaveText = formatLastBanwave(exploit?.detectionReason);
-      const productText = `**Product**\n• Version: \`${verDisplay}\`\n• Roblox Version: \`${rbxVerDisplay}\`\n• Status: ${isWorking ? "🟢 Working" : "🔴 Patched"}${banwaveText ? `\n• Last banwave: \`${banwaveText}\`` : ""}`;
-      const productTextDisplay = new TextDisplayBuilder().setContent(productText);
-
-      const timestampText = new TextDisplayBuilder().setContent(`-# Auto-updated. Last check: <t:${nowUnix}:R>`);
-
-      const container = new ContainerBuilder().setAccentColor(accentColor);
-      const logoUrl = exploit?.slug?.logo;
-
-      if (logoUrl) {
-        // Header + product info in a Section with the executor's logo as thumbnail.
-        container.addSectionComponents(
-          new SectionBuilder()
-            .setThumbnailAccessory(new ThumbnailBuilder().setURL(logoUrl))
-            .addTextDisplayComponents(headerTextDisplay, productTextDisplay),
-        );
-        container.addSeparatorComponents(new SeparatorBuilder());
-      } else {
-        container
-          .addTextDisplayComponents(headerTextDisplay)
-          .addSeparatorComponents(new SeparatorBuilder())
-          .addTextDisplayComponents(productTextDisplay)
-          .addSeparatorComponents(new SeparatorBuilder());
-      }
-
-      if (websiteUrl && (websiteUrl.startsWith("http://") || websiteUrl.startsWith("https://"))) {
-        const btn = new ButtonBuilder()
-          .setLabel("Website")
-          .setStyle(ButtonStyle.Link)
-          .setURL(websiteUrl);
-        container.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(btn));
-        container.addSeparatorComponents(new SeparatorBuilder());
-      }
-
-      container.addTextDisplayComponents(timestampText);
-
-
-
+      const container = buildEmbedStatusContainer(row, statusMap, rbxVer);
       const messageContent = row.customContent?.trim() || undefined;
 
       const ch = await client.channels.fetch(row.channelId);
@@ -648,24 +600,11 @@ async function applyEmbedStatusRows(
           } catch {
             /* ignore */
           }
-          const newMsg = await sendV2Message(ch, [container], messageContent);
-          if (newMsg) {
-            db.prepare(
-              `UPDATE executorEmbedStatusChannels SET messageId = ?, updatedAt = ?
-               WHERE guildId = ? AND channelId = ? AND executorName = ?`,
-            ).run(newMsg.id, Date.now(), row.guildId, row.channelId, row.executorName);
-          }
+          await sendAndRememberEmbedMessage(row, ch, container, messageContent);
         }
       } else {
-        const newMsg = await sendV2Message(ch, [container], messageContent);
-        if (newMsg) {
-          db.prepare(
-            `UPDATE executorEmbedStatusChannels SET messageId = ?, updatedAt = ?
-             WHERE guildId = ? AND channelId = ? AND executorName = ?`,
-          ).run(newMsg.id, Date.now(), row.guildId, row.channelId, row.executorName);
-        }
+        await sendAndRememberEmbedMessage(row, ch, container, messageContent);
       }
-
     } catch (e) {
       if (errorCode(e) === 10003) {
         logger.warn(`Channel ${row.channelId} not found - disabling embed status config`);
@@ -675,6 +614,82 @@ async function applyEmbedStatusRows(
       }
     }
   }
+}
+
+/** Build the status card of one executor row. */
+function buildEmbedStatusContainer(
+  row: EmbedStatusConfig,
+  statusMap: Map<string, WeaoExploit>,
+  rbxVer: string,
+) {
+  const searchKey = normalizeName(row.executorName);
+  const exploit = statusMap.get(searchKey);
+
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const isWorking = exploit?.updateStatus === true;
+  const verDisplay = exploit?.version?.trim() || "N/A";
+  const rbxVerDisplay = exploit?.rbxversion || rbxVer || "N/A";
+  const websiteUrl = exploit?.websitelink?.trim();
+
+  const accentColor = isWorking ? 0x22c55e : 0xef4444;
+
+  // Largest heading (#) so the executor name renders big and bold —
+  // applied to every executor since displayName is uppercased here.
+  const headerText = `# ${row.displayName.toUpperCase()}`;
+  const headerTextDisplay = new TextDisplayBuilder().setContent(headerText);
+
+  const banwaveText = formatLastBanwave(exploit?.detectionReason);
+  const productText = `**Product**\n• Version: \`${verDisplay}\`\n• Roblox Version: \`${rbxVerDisplay}\`\n• Status: ${isWorking ? "🟢 Working" : "🔴 Patched"}${banwaveText ? `\n• Last banwave: \`${banwaveText}\`` : ""}`;
+  const productTextDisplay = new TextDisplayBuilder().setContent(productText);
+
+  const timestampText = new TextDisplayBuilder().setContent(`-# Auto-updated. Last check: <t:${nowUnix}:R>`);
+
+  const container = new ContainerBuilder().setAccentColor(accentColor);
+  const logoUrl = exploit?.slug?.logo;
+
+  if (logoUrl) {
+    // Header + product info in a Section with the executor's logo as thumbnail.
+    container.addSectionComponents(
+      new SectionBuilder()
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(logoUrl))
+        .addTextDisplayComponents(headerTextDisplay, productTextDisplay),
+    );
+    container.addSeparatorComponents(new SeparatorBuilder());
+  } else {
+    container
+      .addTextDisplayComponents(headerTextDisplay)
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(productTextDisplay)
+      .addSeparatorComponents(new SeparatorBuilder());
+  }
+
+  if (websiteUrl && (websiteUrl.startsWith("http://") || websiteUrl.startsWith("https://"))) {
+    const btn = new ButtonBuilder()
+      .setLabel("Website")
+      .setStyle(ButtonStyle.Link)
+      .setURL(websiteUrl);
+    container.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(btn));
+    container.addSeparatorComponents(new SeparatorBuilder());
+  }
+
+  container.addTextDisplayComponents(timestampText);
+
+  return container;
+}
+
+/** Send a fresh status card and remember its message id. */
+async function sendAndRememberEmbedMessage(
+  row: EmbedStatusConfig,
+  ch: TextBasedChannel,
+  container: ContainerBuilder,
+  messageContent: string | undefined,
+) {
+  const newMsg = await sendV2Message(ch, [container], messageContent);
+  if (!newMsg) return;
+  db.prepare(
+    `UPDATE executorEmbedStatusChannels SET messageId = ?, updatedAt = ?
+     WHERE guildId = ? AND channelId = ? AND executorName = ?`,
+  ).run(newMsg.id, Date.now(), row.guildId, row.channelId, row.executorName);
 }
 
 

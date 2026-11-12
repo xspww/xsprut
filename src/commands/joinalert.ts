@@ -54,70 +54,85 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
-  if (subcommand === "add") {
-    const channel = interaction.guild?.channels.cache.get(interaction.channelId);
-    if (!channel || !channel.isTextBased()) {
-      return interaction.reply({
-        content: "❌ New member alerts must be set up in a text channel",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+  switch (subcommand) {
+    case "add":
+      return joinAlertAdd(interaction);
+    case "remove":
+      return joinAlertRemove(interaction);
+    default:
+      // subcommand === "list"
+      return joinAlertList(interaction);
+  }
+}
 
-    const botMember = interaction.guild?.members.me;
-    if (!botMember) {
-      return interaction.reply({
-        content: "❌ Bot information not found in this server",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+/** /joinalert add — send a greeting in this channel when a member joins. */
+async function joinAlertAdd(interaction: ChatInputCommandInteraction) {
+  const channel = interaction.guild?.channels.cache.get(interaction.channelId!);
+  if (!channel || !channel.isTextBased()) {
+    return interaction.reply({
+      content: "❌ New member alerts must be set up in a text channel",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
-    const permissions = channel.permissionsFor(botMember);
-    if (
-      !permissions?.has(PermissionFlagsBits.ViewChannel) ||
-      !permissions?.has(PermissionFlagsBits.SendMessages)
-    ) {
-      return interaction.reply({
-        content:
-          "❌ The bot needs **View Channel** and **Send Messages** permissions in this channel to send alerts",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+  const botMember = interaction.guild?.members.me;
+  if (!botMember) {
+    return interaction.reply({
+      content: "❌ Bot information not found in this server",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
-    const message = interaction.options.getString("message") ?? "";
+  const permissions = channel.permissionsFor(botMember);
+  if (
+    !permissions?.has(PermissionFlagsBits.ViewChannel) ||
+    !permissions?.has(PermissionFlagsBits.SendMessages)
+  ) {
+    return interaction.reply({
+      content:
+        "❌ The bot needs **View Channel** and **Send Messages** permissions in this channel to send alerts",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
-    db.prepare(
-      `
+  const message = interaction.options.getString("message") ?? "";
+
+  db.prepare(
+    `
       INSERT INTO memberJoinAlerts (guildId, channelId, customMessage, enabled)
       VALUES (?, ?, ?, 1)
       ON CONFLICT(guildId)
       DO UPDATE SET channelId = excluded.channelId, customMessage = excluded.customMessage, enabled = 1
     `,
-    ).run(interaction.guildId, interaction.channelId, message);
+  ).run(interaction.guildId, interaction.channelId, message);
 
-    return interaction.reply({
-      content: `✅ New member alerts enabled in this channel${message ? `\n📝 Message: ${message}` : ""}`,
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  return interaction.reply({
+    content: `✅ New member alerts enabled in this channel${message ? `\n📝 Message: ${message}` : ""}`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
 
-  if (subcommand === "remove") {
-    const result = db
-      .prepare(
-        `
+/** /joinalert remove — stop greeting new members. */
+async function joinAlertRemove(interaction: ChatInputCommandInteraction) {
+  const result = db
+    .prepare(
+      `
       DELETE FROM memberJoinAlerts
       WHERE guildId = ?
     `,
-      )
-      .run(interaction.guildId);
+    )
+    .run(interaction.guildId);
 
-    return interaction.reply({
-      content: result.changes
-        ? "✅ New member alerts disabled for this server"
-        : "ℹ️ No new member alert settings found",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  return interaction.reply({
+    content: result.changes
+      ? "✅ New member alerts disabled for this server"
+      : "ℹ️ No new member alert settings found",
+    flags: MessageFlags.Ephemeral,
+  });
+}
 
+/** /joinalert list — show where the greeting is posted. */
+async function joinAlertList(interaction: ChatInputCommandInteraction) {
   const existing = db
     .prepare(
       `

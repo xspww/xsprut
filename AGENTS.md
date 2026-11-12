@@ -24,6 +24,8 @@ npm start             # node dist/index.js (requires .env + DISCORD_BOT_TOKEN + 
 - `src/lib/config.ts` — reads `.env` with `dotenv` (quiet). `DB_PATH` or `NODE_TEST_CONTEXT` switches DB to `:memory:` for tests.
 - `src/lib/db.ts` — SQLite file `data.db` (default), `:memory:` for tests. Embedded migrations (ALTER TABLE / index creation / column additions / data migrations) run on every open. Do not delete them. Statement-cache monkey-patches `db.prepare()` for hot paths.
 - `src/commands/index.ts` — loads all `.ts` files from `src/commands/` except `index.ts` and `protectroomEdit.ts`. Command = `{ data, execute?, cooldownMs?, autocomplete? }`. Sub-directories are skipped (the name does not end in `.ts`/`.js`), so a command may keep its handlers in a folder next to it — `src/commands/executorStatus/` holds the `/ex` command's `data.ts`, `track.ts`, `botVoice.ts`, `botChat.ts` and `shared.ts`.
+- `src/events/index.ts` — loads every `.ts` file from `src/events/` except `index.ts`. Same rule: sub-directories are skipped, so `src/events/messageCreate/` holds the message handler's `state.ts`, `prefix.ts` and `protect.ts`, and `src/events/interactionCreate/` holds the interaction handler's `command.ts`, `panel.ts` and `verify.ts`.
+- `src/lib/panel.ts` — the server configuration panel. The implementation lives in `src/lib/panel/` (`builders.ts`, `button.ts`, `select.ts`, `modal.ts`, `shared.ts`); `src/lib/panel.ts` stays the public entry point so the existing imports keep working.
 
 ## Commands and scripts worth knowing
 
