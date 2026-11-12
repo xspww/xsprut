@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { client } from "../lib/client";
 import logger from "../lib/logger";
+import type { CommandOption } from "./index";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
@@ -78,11 +79,18 @@ const HELP_GROUPS: HelpGroup[] = [
   },
 ];
 
+/** The JSON shape a slash command is built from, before it is sent to Discord. */
+type CommandJson = {
+  name: string;
+  description?: string;
+  options?: CommandOption[];
+};
+
 /**
  * Flattens a command's SlashCommandBuilder JSON into an array of full command paths with descriptions.
  * Handles top-level commands, subcommand groups, and subcommands.
  */
-function flattenCommand(commandData: any): { path: string; description: string }[] {
+function flattenCommand(commandData: CommandJson): { path: string; description: string }[] {
   const baseName = commandData.name;
   const baseDesc = commandData.description ?? "No description available.";
   const results: { path: string; description: string }[] = [];
@@ -122,7 +130,8 @@ function flattenCommand(commandData: any): { path: string; description: string }
 function buildDescriptionMap(): Map<string, string> {
   const map = new Map<string, string>();
   for (const cmd of client.commands.values()) {
-    const json = typeof (cmd.data as any).toJSON === "function" ? (cmd.data as any).toJSON() : (cmd.data as any);
+    const json: CommandJson =
+      typeof cmd.data.toJSON === "function" ? (cmd.data.toJSON() as CommandJson) : cmd.data;
     if (!json || !json.name) continue;
     for (const entry of flattenCommand(json)) {
       map.set(entry.path, entry.description);

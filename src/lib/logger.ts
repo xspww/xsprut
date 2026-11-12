@@ -68,19 +68,19 @@ function format(level: Level, message: string): string {
 }
 
 const logger = {
-  info(msg: string, ...optionalParams: any[]) {
+  info(msg: string, ...optionalParams: unknown[]) {
     console.log(format("INFO", msg), ...optionalParams);
     writeToFile(`[INFO] ${timestamp()} ${msg}${optionalParams.length ? " " + optionalParams.map(String).join(" ") : ""}`);
   },
-  warn(msg: string, ...optionalParams: any[]) {
+  warn(msg: string, ...optionalParams: unknown[]) {
     console.warn(format("WARN", msg), ...optionalParams);
     writeToFile(`[WARN] ${timestamp()} ${msg}${optionalParams.length ? " " + optionalParams.map(String).join(" ") : ""}`);
   },
-  error(msg: string, ...optionalParams: any[]) {
+  error(msg: string, ...optionalParams: unknown[]) {
     console.error(format("ERROR", msg), ...optionalParams);
     writeToFile(`[ERROR] ${timestamp()} ${msg}${optionalParams.length ? " " + optionalParams.map(String).join(" ") : ""}`);
   },
-  ok(msg: string, ...optionalParams: any[]) {
+  ok(msg: string, ...optionalParams: unknown[]) {
     console.log(format("OK", msg), ...optionalParams);
     writeToFile(`[OK] ${timestamp()} ${msg}${optionalParams.length ? " " + optionalParams.map(String).join(" ") : ""}`);
   },

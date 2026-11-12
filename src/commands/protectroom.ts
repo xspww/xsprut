@@ -8,6 +8,7 @@ import {
 import db from "../lib/db";
 import logger from "../lib/logger";
 import { invalidateProtectedRoom } from "../lib/dbCache";
+import { errorMessage } from "../lib/errorMessage";
 import {
   PROTECT_ACTION_META,
   sendProtectRoomNotice,
@@ -137,8 +138,8 @@ export async function setProtectRoom(
         contentType: attachment?.contentType,
         scope: "protect",
       });
-    } catch (e: any) {
-      return interaction.editReply(e?.message ?? "❌ Could not save the image");
+    } catch (e) {
+      return interaction.editReply(errorMessage(e) ?? "❌ Could not save the image");
     }
   } else if (resolved.image?.kind === "url") {
     storedImage = resolved.image.url;

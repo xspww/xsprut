@@ -9,6 +9,7 @@ import { client } from "../lib/client";
 import logger from "../lib/logger";
 import { collectKickedGuilds, deleteGuildData } from "../lib/guildCleanup";
 import { clearDbCaches } from "../lib/dbCache";
+import { errorMessage } from "../lib/errorMessage";
 
 export const data = new SlashCommandBuilder()
   .setName("cleanup")
@@ -60,8 +61,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     try {
       const conn = getVoiceConnection(guildId);
       if (conn) conn.destroy();
-    } catch (e: any) {
-      logger.warn("Cleanup failed: ", e?.message ?? e);
+    } catch (e) {
+      logger.warn("Cleanup failed: ", errorMessage(e) ?? String(e));
     }
   }
 

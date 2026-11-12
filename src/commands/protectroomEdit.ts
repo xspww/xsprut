@@ -3,6 +3,7 @@ import { MessageFlags } from "discord.js";
 import db from "../lib/db";
 import logger from "../lib/logger";
 import { invalidateProtectedRoom } from "../lib/dbCache";
+import { errorMessage } from "../lib/errorMessage";
 import { buildProtectRoomNoticeComponents, type ProtectAction } from "../lib/protectRoom";
 import {
   deleteLocalPanelImage,
@@ -63,8 +64,8 @@ export async function editProtectRoom(interaction: ChatInputCommandInteraction) 
           contentType: attachment?.contentType,
           scope: "protect",
         });
-      } catch (e: any) {
-        return interaction.editReply(e?.message ?? "❌ Could not save the image");
+      } catch (e) {
+        return interaction.editReply(errorMessage(e) ?? "❌ Could not save the image");
       }
     }
   }

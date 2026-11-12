@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
+import { ChatInputCommandInteraction, SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
 import { buildMainMenu } from "../lib/panel";
 
 export const data = new SlashCommandBuilder()
@@ -6,7 +6,7 @@ export const data = new SlashCommandBuilder()
   .setDescription("🎛️ เปิด Server Configuration Panel")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
-export async function execute(interaction: any) {
+export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
     return interaction.reply({ content: "❌ ใช้ได้เฉพาะใน server", flags: MessageFlags.Ephemeral });
   }

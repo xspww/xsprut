@@ -21,6 +21,7 @@ import {
   updatePanelMessageId,
   type VerificationMode,
 } from "../lib/verifyManager";
+import { errorMessage } from "../lib/errorMessage";
 import {
   deleteLocalPanelImage,
   panelImageDisplayUrl,
@@ -163,8 +164,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           contentType: attachment?.contentType,
           scope: "verify",
         });
-      } catch (e: any) {
-        return interaction.editReply(e?.message ?? "❌ Could not save the image");
+      } catch (e) {
+        return interaction.editReply(errorMessage(e) ?? "❌ Could not save the image");
       }
     } else if (resolved.image?.kind === "url") {
       storedImage = resolved.image.url;

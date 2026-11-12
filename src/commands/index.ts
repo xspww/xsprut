@@ -1,15 +1,26 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
+
+/** One option of a slash command, in the shape `toJSON()` produces. */
+export type CommandOption = {
+  type: number;
+  name: string;
+  description?: string;
+  options?: CommandOption[];
+};
 
 export type Command = {
   data: {
     name: string;
+    description?: string;
+    options?: CommandOption[];
     toJSON?: () => unknown;
   };
   cooldownMs?: number;
-  execute: (...args: any[]) => any;
-  autocomplete?: (...args: any[]) => any;
+  execute: (interaction: ChatInputCommandInteraction) => Promise<unknown>;
+  autocomplete?: (interaction: AutocompleteInteraction) => Promise<unknown>;
 };
 
 // Helper modules that live next to commands but are NOT slash commands.
