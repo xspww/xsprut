@@ -20,6 +20,7 @@ import {
   ROBLOX_LIVE_BANNER,
 } from "../lib/constants";
 import { interpolateV2Content, sendV2Message } from "../lib/v2Message";
+import { errorCode } from "../lib/errorMessage";
 
 // Alert rows come from the DB cache (see src/lib/dbCache.ts) — the config only
 // changes through slash commands, which invalidate the cache on every write.
@@ -127,7 +128,6 @@ async function sendContainerAlert(
         {
           components: [container],
           files: [{ attachment: banner.file, name: banner.name }],
-          flags: MessageFlags.IsComponentsV2 as any,
         },
         { hash, robloxChannel, version },
       );
@@ -136,8 +136,8 @@ async function sendContainerAlert(
         const channelName = "name" in channel ? `#${channel.name}` : alert.channelId;
         logger.info(`Roblox ${alertType} [${robloxChannel}] ${hash} -> ${guildName} ${channelName}`);
       }
-    } catch (e: any) {
-      if (e?.code === 10003) {
+    } catch (e) {
+      if (errorCode(e) === 10003) {
         logger.warn(`Channel ${alert.channelId} not found — removing from alerts table`);
         db.prepare(`DELETE FROM alerts WHERE channelId = ?`).run(alert.channelId);
         invalidateAlerts();

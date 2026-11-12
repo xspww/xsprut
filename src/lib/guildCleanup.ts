@@ -3,6 +3,7 @@ import { client } from "./client";
 import db from "./db";
 import logger from "./logger";
 import { clearDbCaches } from "./dbCache";
+import { errorMessage } from "./errorMessage";
 
 // Every per-guild table and its guild column. Global tables (botStatus,
 // knownVersions, channelState, executorLastState) are intentionally excluded.
@@ -79,8 +80,8 @@ export function cleanupOrphanedGuilds(): string[] {
     try {
       const conn = getVoiceConnection(guildId);
       if (conn) conn.destroy();
-    } catch (e: any) {
-      logger.warn("Guild cleanup failed for ", guildId, ": ", e?.message ?? e);
+    } catch (e) {
+      logger.warn("Guild cleanup failed for ", guildId, ": ", errorMessage(e) ?? String(e));
     }
 
     logger.info(`Guild cleanup: bot is no longer in guild ${guildId} (kicked) — wiping its data.`);

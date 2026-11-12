@@ -101,7 +101,7 @@ export async function joinBotVoiceChannel(guildId: string, voiceChannelId: strin
     ).run(guildId, voiceChannelId);
 
     return true;
-  } catch (error: any) {
+  } catch (error) {
     logger.error(`Failed to join voice channel ${voiceChannelId} in guild ${guildId}:`, error);
     // set cooldown so we don't spam join attempts
     try {

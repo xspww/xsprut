@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 type Event = {
   name: string;
   once?: boolean;
-  execute: (...args: any[]) => any;
+  execute: (...args: unknown[]) => unknown;
 };
 
 export async function loadEvents(): Promise<Event[]> {

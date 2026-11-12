@@ -1,4 +1,4 @@
-import { Events } from "discord.js";
+import { Events, type Client } from "discord.js";
 import logger from "../lib/logger";
 import { startMonitoring } from "../monitoring";
 import { startExecutorStatusMonitoring } from "../monitoring/executorStatus";
@@ -9,6 +9,7 @@ import db from "../lib/db";
 import { pruneKnownVersions } from "../lib/knownVersions";
 import { invalidateKnownVersionsCache } from "../lib/dbCache";
 import { KNOWN_VERSIONS_PRUNE_INTERVAL_MS } from "../lib/constants";
+import { errorMessage } from "../lib/errorMessage";
 
 function runKnownVersionsPrune() {
   try {
@@ -24,14 +25,13 @@ function runKnownVersionsPrune() {
 export const name = Events.ClientReady;
 export const once = true;
 
-export async function execute(...args: any[]) {
+export async function execute(client: Client) {
   try {
     logger.info("Logged into Discord bot!");
-    const client = args[0];
     try {
       logger.info(`Bot user: ${client?.user?.tag ?? 'unknown'} (${client?.user?.id ?? 'unknown id'})`);
-    } catch (e: any) {
-      logger.error("Client ready monitoring error: ", e?.message ?? e);
+    } catch (e) {
+      logger.error("Client ready monitoring error: ", errorMessage(e) ?? String(e));
     }
 
     // Full-auto cleanup: wipe DB data for any guild the bot is no longer a

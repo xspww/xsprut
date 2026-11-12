@@ -2,6 +2,7 @@ import { client } from "./lib/client";
 import logger from "./lib/logger";
 import config, { assertConfig } from "./lib/config";
 import { initErrorHandler, reportError } from "./lib/errorReporter";
+import { errorCode } from "./lib/errorMessage";
 import { loadCommands } from "./commands";
 import { loadEvents } from "./events";
 
@@ -75,10 +76,11 @@ async function loginWithRetry() {
     try {
       await client.login(config.DISCORD_BOT_TOKEN!);
       return;
-    } catch (error: any) {
+    } catch (error: unknown) {
       attempt++;
       // Never recoverable — do not retry forever.
-      if (error?.code === "TokenInvalid" || error?.code === 4004 || error?.code === "DisallowedIntents") {
+      const code = errorCode(error);
+      if (code === "TokenInvalid" || code === 4004 || code === "DisallowedIntents") {
         throw error;
       }
       const delayMs = Math.min(60_000, 5_000 * Math.pow(2, Math.min(attempt - 1, 4)));
@@ -108,9 +110,9 @@ async function start() {
   const events = await loadEvents();
   for (const event of events) {
     if (event.once) {
-      client.once(event.name, (...args: any[]) => event.execute(...args));
+      client.once(event.name, (...args: unknown[]) => event.execute(...args));
     } else {
-      client.on(event.name, (...args: any[]) => event.execute(...args));
+      client.on(event.name, (...args: unknown[]) => event.execute(...args));
     }
   }
 

@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import logger from "./logger";
+import { errorMessage } from "./errorMessage";
 
 // DB_PATH lets tests (and alternate deployments) point at another file without
 // touching the default. Relative paths resolve against the project root.
@@ -264,8 +265,8 @@ const lastAlertedExists = db
 if (!lastAlertedExists) {
   try {
     db.exec(`ALTER TABLE executorLastState ADD COLUMN lastAlertedVersion TEXT;`);
-  } catch (e: any) {
-    logger.error("DB migration failed: ", e?.message ?? e);
+  } catch (e) {
+    logger.error("DB migration failed: ", errorMessage(e) ?? String(e));
   }
 }
 
@@ -372,7 +373,10 @@ if (!chatStatusCategoryIdExists) {
 }
 
 // Migration for botVoiceChannels: ensure categoryId is nullable and add omitPrefix column if missing
-const botVoicePragmaRows = db.prepare(`PRAGMA table_info('botVoiceChannels')`).all() as any[];
+/** One row of `PRAGMA table_info(...)`. */
+type PragmaRow = { name: string; notnull: number };
+
+const botVoicePragmaRows = db.prepare(`PRAGMA table_info('botVoiceChannels')`).all() as PragmaRow[];
 const botVoiceCategoryInfo = botVoicePragmaRows.find(r => r && r.name === 'categoryId');
 const botVoiceOmitInfo = botVoicePragmaRows.find(r => r && r.name === 'omitPrefix');
 
@@ -440,7 +444,7 @@ if (!botVoiceCategoryInfo) {
 }
 
 // Migration for protectedRooms: add actionType and timeoutDuration columns if missing
-const protectedRoomsPragmaRows = db.prepare(`PRAGMA table_info('protectedRooms')`).all() as any[];
+const protectedRoomsPragmaRows = db.prepare(`PRAGMA table_info('protectedRooms')`).all() as PragmaRow[];
 const actionTypeExists = protectedRoomsPragmaRows.find(r => r && r.name === 'actionType');
 const timeoutDurationExists = protectedRoomsPragmaRows.find(r => r && r.name === 'timeoutDuration');
 

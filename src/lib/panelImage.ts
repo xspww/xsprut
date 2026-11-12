@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import fetch from "node-fetch";
+import { errorMessage, errorName } from "./errorMessage";
 
 /**
  * Shared helpers for optional banner images on Components v2 panels
@@ -135,10 +136,11 @@ export async function persistPanelImageFromUrl(
     )}`.slice(0, 80);
     fs.writeFileSync(path.join(PANEL_IMAGE_DIR, filename), buf);
     return `${PANEL_IMAGE_LOCAL_PREFIX}${filename}`;
-  } catch (e: any) {
-    if (e?.name === "AbortError") throw new Error("❌ Downloading the image timed out, please try again");
-    if (e?.message === "not an image") throw new Error("❌ The uploaded file is not an image");
-    if (e?.message === "too large (max 8MB)") throw new Error("❌ `banner` is too large — max 8MB");
+  } catch (e) {
+    if (errorName(e) === "AbortError") throw new Error("❌ Downloading the image timed out, please try again");
+    const message = errorMessage(e);
+    if (message === "not an image") throw new Error("❌ The uploaded file is not an image");
+    if (message === "too large (max 8MB)") throw new Error("❌ `banner` is too large — max 8MB");
     throw new Error("❌ Could not download the uploaded image, please try again");
   } finally {
     clearTimeout(timer);

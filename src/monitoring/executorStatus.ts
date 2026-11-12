@@ -30,6 +30,7 @@ import {
   EMBED_SCHEDULER_TICK_MS,
 } from "../lib/constants";
 import { interpolateV2Content, sendV2Message } from "../lib/v2Message";
+import { errorCode, errorMessage } from "../lib/errorMessage";
 import {
   getChannelState,
   getExecutorLastState,
@@ -139,9 +140,9 @@ export async function withRetry<T>(
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       return await task(attempt);
-    } catch (e: any) {
+    } catch (e) {
       lastError = e;
-      logger.warn(`Attempt ${attempt} ${opts.label} failed:`, e?.message || e);
+      logger.warn(`Attempt ${attempt} ${opts.label} failed:`, errorMessage(e) ?? String(e));
       if (attempt < attempts) {
         const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
         const delay = Math.floor(Math.random() * base);
@@ -162,7 +163,7 @@ export async function fetchExecutorData(): Promise<WeaoExploit[]> {
     try {
       const response = await fetch(WEAO_EXPLOITS_URL, {
         headers: { "User-Agent": "RobloxUpdateTracker/1.0" },
-        signal: controller.signal as any,
+        signal: controller.signal,
       });
       if (!response.ok) {
         throw new Error(`WEAO API returned HTTP ${response.status}`);
@@ -280,8 +281,8 @@ export async function sendExecutorUpdateAlert(
           logger.info(`Executor update [${displayName}] -> ${guildName} ${channelName}`);
         }
       }
-    } catch (e: any) {
-      if (e?.code === 10003) {
+    } catch (e) {
+      if (errorCode(e) === 10003) {
         logger.warn(`Channel ${channelId} not found — removing from executorAlerts`);
         db.prepare(`DELETE FROM executorAlerts WHERE channelId = ?`).run(channelId);
         invalidateExecutorAlerts();
@@ -370,7 +371,7 @@ export async function updateExecutorChatStatusChannels() {
       if (ch.name !== nextName) {
         await ch.setName(nextName, "Roblox executor status changed");
       }
-    } catch (e: any) {
+    } catch (e) {
       logger.error(`Failed to update chat channel for ${row.executorName}:`, e);
     }
   }
@@ -632,12 +633,12 @@ async function applyEmbedStatusRows(
           const customTextDisplay = new TextDisplayBuilder().setContent(messageContent);
           await targetMsg.edit({
             components: [customTextDisplay, container],
-            flags: MessageFlags.IsComponentsV2 as any,
+            flags: MessageFlags.IsComponentsV2,
           });
         } else if (isComponentsV2Edit) {
           await targetMsg.edit({
             components: [container],
-            flags: MessageFlags.IsComponentsV2 as any,
+            flags: MessageFlags.IsComponentsV2,
           });
         } else {
           // Existing message is NOT ComponentsV2 — we can't switch a regular message to V2 via edit,
@@ -665,9 +666,9 @@ async function applyEmbedStatusRows(
         }
       }
 
-    } catch (e: any) {
-      if (e?.code === 10003) {
-        logger.warn(`Channel ${row.channelId} not found — disabling embed status config`);
+    } catch (e) {
+      if (errorCode(e) === 10003) {
+        logger.warn(`Channel ${row.channelId} not found - disabling embed status config`);
         db.prepare(`UPDATE executorEmbedStatusChannels SET enabled = 0 WHERE channelId = ?`).run(row.channelId);
       } else {
         logger.error(`Failed to update embed status for ${row.executorName} in ${row.channelId}:`, e);
@@ -780,7 +781,7 @@ async function embedSchedulerLoop() {
           try {
             await refreshSingleEmbedStatusRow(r, statusMap);
             lastEmbedRefreshAt.set(key, Date.now());
-          } catch (e: any) {
+          } catch (e) {
             logger.error(`Embed scheduler failed for ${r.executorName} in ${r.channelId}:`, e);
           }
         }
@@ -965,7 +966,7 @@ export async function updateBotVoiceChannels() {
       } catch (e) {
         logger.error(`Failed to join voice channel ${ch.id}:`, e);
       }
-    } catch (e: any) {
+    } catch (e) {
       logger.error(`Failed to update bot voice channel for guild ${row.guildId}:`, e);
     }
   }
@@ -992,8 +993,7 @@ async function findOrCreateBotChatChannel(cfg: BotChatConfig, targetName: string
   }
 
   const botMember = await guild.members.fetchMe();
-  const parent = category as any;
-  if (parent && !parent.permissionsFor?.(botMember)?.has(PermissionFlagsBits.ManageChannels)) {
+  if (category && !category.permissionsFor?.(botMember)?.has(PermissionFlagsBits.ManageChannels)) {
     throw new Error("Bot is missing Manage Channels permission.");
   }
 
@@ -1036,7 +1036,7 @@ export async function updateBotChatChannels() {
       if (ch.name !== display) {
         await ch.setName(display, "Roblox version status update");
       }
-    } catch (e: any) {
+    } catch (e) {
       logger.error(`Failed to update bot chat channel for guild ${row.guildId}:`, e);
     }
   }

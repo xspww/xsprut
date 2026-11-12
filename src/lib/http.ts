@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import { errorCode } from "./errorMessage";
 
 export interface FetchOptions {
   retries?: number;
@@ -6,11 +7,28 @@ export interface FetchOptions {
   headers?: Record<string, string>;
 }
 
+/** An error that marks a response as worth another attempt. */
+class RetryableHttpError extends Error {
+  readonly isHttpRetry = true;
+}
+
 function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-export async function fetchJsonWithRetry<T = any>(
+/** Is this failure worth another attempt? */
+function isRetriable(error: unknown): boolean {
+  if (error instanceof RetryableHttpError) return true;
+  if (typeof error !== "object" || error === null) return false;
+
+  if ("name" in error && error.name === "AbortError") return true;
+  const code = errorCode(error);
+  if (code === "ECONNRESET" || code === "ETIMEDOUT") return true;
+  if ("type" in error && error.type === "system") return true;
+  return false;
+}
+
+export async function fetchJsonWithRetry<T = unknown>(
   url: string,
   options: FetchOptions = {},
 ): Promise<T | null> {
@@ -26,9 +44,7 @@ export async function fetchJsonWithRetry<T = any>(
       clearTimeout(id);
       if (!res.ok) {
         if (res.status >= 500 || res.status === 429) {
-          const error = new Error(`HTTP ${res.status}`);
-          (error as any).isHttpRetry = true;
-          throw error;
+          throw new RetryableHttpError(`HTTP ${res.status}`);
         }
         // Don't throw for other non-200, just return null so callers can handle it
         return null;
@@ -36,17 +52,12 @@ export async function fetchJsonWithRetry<T = any>(
 
       const data = (await res.json()) as T;
       return data;
-    } catch (err: any) {
+    } catch (err) {
       clearTimeout(id);
       const isLast = attempt === retries;
 
       // For aborts or connection resets/timeouts, retry
-      const retriable =
-        err?.isHttpRetry ||
-        err?.name === "AbortError" ||
-        err?.code === "ECONNRESET" ||
-        err?.code === "ETIMEDOUT" ||
-        err?.type === "system";
+      const retriable = isRetriable(err);
 
       if (!retriable || isLast) {
         // If not retriable or no attempts left, rethrow so callers can log or handle
