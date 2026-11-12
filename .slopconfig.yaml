@@ -1,0 +1,58 @@
+# .slopconfig.yaml — AI SLOP Detector configuration for xsprut
+#
+# xsprut is a TypeScript project with no Python sources, so the detector runs
+# its JS/TS analyzer (tree-sitter AST mode). Two consequences shape this file:
+#
+#   * `patterns.disabled` and `patterns.god_function.domain_overrides` only
+#     reach the Python pattern registry. The JS/TS analyzer hardcodes its
+#     thresholds (50 lines / complexity 10 / nesting depth 4), so they cannot
+#     be widened from here — a god function has to be split in the code.
+#   * `ignore` is the only key that reaches the JS/TS analyzer, and it works
+#     per file, not per finding.
+#
+# Run it with:
+#   slop-detector scan . --js --config .slopconfig.yaml
+#
+# Known false positives that cannot be silenced per finding:
+#   * `Empty arrow function` on `.catch(() => {})` — an intentionally ignored
+#     rejection handler, not an unimplemented placeholder.
+#   * `console.* in production code` inside src/lib/logger.ts — writing to the
+#     console is the logger's whole job.
+#
+# NOTE: a config file REPLACES the built-in ignore list instead of extending
+# it, so the defaults below are repeated on purpose. Dropping one of them
+# puts build output or the test suite back into the scan.
+
+ignore:
+  # ── Built-in defaults, repeated so they survive the override ────────────
+  - "**/__init__.py"
+  - "tests/**"
+  - "**/*_test.py"
+  - "**/test_*.py"
+  - "**/*.pyi"
+  - "**/.venv/**"
+  - ".venv/**"
+  - "**/venv/**"
+  - "venv/**"
+  - "**/site-packages/**"
+  - "site-packages/**"
+  - "**/node_modules/**"
+  - "node_modules/**"
+  - "**/__pycache__/**"
+  - "**/build/**"
+  - "build/**"
+  - "**/dist/**"
+  - "dist/**"
+  - "**/.tox/**"
+  - ".tox/**"
+  - "**/.next/**"
+  - ".next/**"
+  - "**/htmlcov/**"
+  - "htmlcov/**"
+  - "**/.claude/**"
+  - ".claude/**"
+
+  # ── xsprut-specific ─────────────────────────────────────────────────────
+  # The logger's job is to call console.*; a "console in production code"
+  # finding here is the implementation, not a defect.
+  - "src/lib/logger.ts"

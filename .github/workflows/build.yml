@@ -41,3 +41,26 @@ jobs:
 
       - name: Test
         run: npm test
+
+  slop-gate:
+    name: AI slop gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install AI SLOP Detector
+        run: pip install "ai-slop-detector[js]==3.13.0"
+
+      # The detector has no JS/TS project to learn from, so it runs with the
+      # JS analyzer enabled and the repo's own .slopconfig.yaml. The gate
+      # fails the build on a critical deficit (score >= 70, 3+ critical
+      # findings, inflated claim ratio, or an unresolved import dependency).
+      - name: Scan for AI slop
+        run: slop-detector scan . --js --config .slopconfig.yaml --ci-mode hard --ci-report
