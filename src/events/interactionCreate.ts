@@ -272,7 +272,12 @@ export async function execute(interaction: Interaction) {
   // ─── String Select Menus ──────────────────────────────────────────────────
   }
 
-  else if (interaction.isStringSelectMenu() && interaction.customId.startsWith("panel:")) {
+  else if (
+    (interaction.isStringSelectMenu() ||
+      interaction.isRoleSelectMenu() ||
+      interaction.isChannelSelectMenu()) &&
+    interaction.customId.startsWith("panel:")
+  ) {
     try {
       await handlePanelSelect(interaction);
     } catch (e) {
