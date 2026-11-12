@@ -1,6 +1,7 @@
 import {
   ChatInputCommandInteraction,
   EmbedBuilder,
+  Guild,
   MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
@@ -28,153 +29,146 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   // Auto-clean deleted channels from DB
   if (interaction.guild) {
-    try {
-      const fetchedChannels = await interaction.guild.channels.fetch();
-
-      // Clean alerts table
-      db.prepare(
-        `SELECT channelId FROM alerts WHERE guildId = ?`,
-      )
-        .all(interaction.guildId)
-        .forEach((row: any) => {
-          if (!fetchedChannels.has(row.channelId)) {
-            db.prepare(`DELETE FROM alerts WHERE guildId = ? AND channelId = ?`).run(interaction.guildId, row.channelId);
-          }
-        });
-      invalidateAlerts();
-
-      // Clean executorChatStatusChannels table
-      db.prepare(
-        `SELECT executorName, channelId FROM executorChatStatusChannels WHERE guildId = ?`,
-      )
-        .all(interaction.guildId)
-        .forEach((row: any) => {
-          if (row.channelId && !fetchedChannels.has(row.channelId)) {
-            db.prepare(`UPDATE executorChatStatusChannels SET channelId = NULL WHERE guildId = ? AND executorName = ?`).run(interaction.guildId, row.executorName);
-          }
-        });
-
-      // Clean executorStatusChannels table
-      db.prepare(
-        `SELECT executorName, voiceChannelId FROM executorStatusChannels WHERE guildId = ?`,
-      )
-        .all(interaction.guildId)
-        .forEach((row: any) => {
-          if (row.voiceChannelId && !fetchedChannels.has(row.voiceChannelId)) {
-            db.prepare(`UPDATE executorStatusChannels SET voiceChannelId = NULL WHERE guildId = ? AND executorName = ?`).run(interaction.guildId, row.executorName);
-          }
-        });
-
-      // Clean botVoiceChannels table
-      db.prepare(
-        `SELECT voiceChannelId FROM botVoiceChannels WHERE guildId = ?`,
-      )
-        .all(interaction.guildId)
-        .forEach((row: any) => {
-          if (row.voiceChannelId && !fetchedChannels.has(row.voiceChannelId)) {
-            db.prepare(`UPDATE botVoiceChannels SET voiceChannelId = NULL WHERE guildId = ?`).run(interaction.guildId);
-          }
-        });
-
-      // Clean executorEmbedStatusChannels table
-      db.prepare(
-        `SELECT executorName, channelId FROM executorEmbedStatusChannels WHERE guildId = ?`,
-      )
-        .all(interaction.guildId)
-        .forEach((row: any) => {
-          if (row.channelId && !fetchedChannels.has(row.channelId)) {
-            db.prepare(`DELETE FROM executorEmbedStatusChannels WHERE guildId = ? AND executorName = ?`).run(interaction.guildId, row.executorName);
-          }
-        });
-
-      // Clean memberJoinAlerts table
-      db.prepare(`SELECT channelId FROM memberJoinAlerts WHERE guildId = ?`)
-        .all(interaction.guildId)
-        .forEach((row: any) => {
-          if (row.channelId && !fetchedChannels.has(row.channelId)) {
-            db.prepare(`DELETE FROM memberJoinAlerts WHERE guildId = ?`).run(interaction.guildId);
-          }
-        });
-    } catch (e) {
-      logger.error("Failed to auto-clean stale channels in /config:", e);
-    }
+    await cleanupStaleChannels(interaction.guild, interaction.guildId);
   }
 
+  return interaction.reply({
+    embeds: [buildSettingsEmbed(interaction.guildId)],
+    flags: MessageFlags.Ephemeral,
+  });
+}
 
-  // Roblox Update Alerts
-  const robloxAlerts = db
-    .prepare(
-      `SELECT channelId, robloxChannel, customContent FROM alerts
-       WHERE guildId = ? AND enabled = 1 ORDER BY robloxChannel`,
-    )
-    .all(interaction.guildId) as { channelId: string; robloxChannel: string; customContent: string }[];
+/**
+ * Drop or detach every channel reference that no longer exists.
+ *
+ * A channel deleted in Discord leaves a dangling row behind; the background
+ * refreshers would keep trying to rename it. Runs before the overview is
+ * built so the embed shows the cleaned-up state.
+ */
+async function cleanupStaleChannels(guild: Guild, guildId: string) {
+  try {
+    const fetchedChannels = await guild.channels.fetch();
+    const isGone = (channelId: string) => !fetchedChannels.has(channelId);
 
-  // Executor Voice Trackers
-  const voiceTrackers = db
-    .prepare(
-      `SELECT executorName, displayName, categoryId, voiceChannelId FROM executorStatusChannels
-       WHERE guildId = ? AND enabled = 1 ORDER BY executorName`,
-    )
-    .all(interaction.guildId) as {
-    executorName: string;
-    displayName: string;
-    categoryId: string;
-    voiceChannelId: string | null;
-  }[];
+    // Clean alerts table
+    const alertRows = db
+      .prepare(`SELECT channelId FROM alerts WHERE guildId = ?`)
+      .all(guildId) as { channelId: string }[];
+    for (const row of alertRows) {
+      if (isGone(row.channelId)) {
+        db.prepare(`DELETE FROM alerts WHERE guildId = ? AND channelId = ?`).run(guildId, row.channelId);
+      }
+    }
+    invalidateAlerts();
 
-  // Executor Chat Status Trackers
-  const chatTrackers = db
-    .prepare(
-      `SELECT executorName, displayName, categoryId, channelId FROM executorChatStatusChannels
-       WHERE guildId = ? AND enabled = 1 ORDER BY executorName`,
-    )
-    .all(interaction.guildId) as {
-    executorName: string;
-    displayName: string;
-    categoryId: string;
-    channelId: string | null;
-  }[];
+    // Clean executorChatStatusChannels table
+    const chatRows = db
+      .prepare(`SELECT executorName, channelId FROM executorChatStatusChannels WHERE guildId = ?`)
+      .all(guildId) as { executorName: string; channelId: string | null }[];
+    for (const row of chatRows) {
+      if (row.channelId && isGone(row.channelId)) {
+        db.prepare(
+          `UPDATE executorChatStatusChannels SET channelId = NULL WHERE guildId = ? AND executorName = ?`,
+        ).run(guildId, row.executorName);
+      }
+    }
 
-  // Executor Embed Status Trackers
-  const embedTrackers = db
-    .prepare(
-      `SELECT executorName, displayName, channelId, intervalMs FROM executorEmbedStatusChannels
-       WHERE guildId = ? AND enabled = 1 ORDER BY executorName`,
-    )
-    .all(interaction.guildId) as {
-    executorName: string;
-    displayName: string;
-    channelId: string;
-    intervalMs: number | null;
-  }[];
+    // Clean executorStatusChannels table
+    const voiceRows = db
+      .prepare(`SELECT executorName, voiceChannelId FROM executorStatusChannels WHERE guildId = ?`)
+      .all(guildId) as { executorName: string; voiceChannelId: string | null }[];
+    for (const row of voiceRows) {
+      if (row.voiceChannelId && isGone(row.voiceChannelId)) {
+        db.prepare(
+          `UPDATE executorStatusChannels SET voiceChannelId = NULL WHERE guildId = ? AND executorName = ?`,
+        ).run(guildId, row.executorName);
+      }
+    }
 
-  // Bot Voice Status
-  const botVoiceTracker = db
-    .prepare(
-      `SELECT categoryId, voiceChannelId, mode, displayName, robloxChannel, omitPrefix FROM botVoiceChannels
-       WHERE guildId = ? AND enabled = 1`,
-    )
-    .get(interaction.guildId) as {
-    categoryId: string;
-    voiceChannelId: string | null;
-    mode: string;
-    displayName: string;
-    robloxChannel: string;
-    omitPrefix?: number | boolean;
-  } | undefined;
+    // Clean botVoiceChannels table
+    const botVoiceRows = db
+      .prepare(`SELECT voiceChannelId FROM botVoiceChannels WHERE guildId = ?`)
+      .all(guildId) as { voiceChannelId: string | null }[];
+    for (const row of botVoiceRows) {
+      if (row.voiceChannelId && isGone(row.voiceChannelId)) {
+        db.prepare(`UPDATE botVoiceChannels SET voiceChannelId = NULL WHERE guildId = ?`).run(guildId);
+      }
+    }
 
-  // Executor Text Alert Channels
-  const execAlerts = db
-    .prepare(`SELECT channelId, executorName, displayName FROM executorAlerts WHERE guildId = ? AND enabled = 1`)
-    .all(interaction.guildId) as { channelId: string; executorName: string; displayName: string }[];
+    // Clean executorEmbedStatusChannels table
+    const embedRows = db
+      .prepare(`SELECT executorName, channelId FROM executorEmbedStatusChannels WHERE guildId = ?`)
+      .all(guildId) as { executorName: string; channelId: string | null }[];
+    for (const row of embedRows) {
+      if (row.channelId && isGone(row.channelId)) {
+        db.prepare(
+          `DELETE FROM executorEmbedStatusChannels WHERE guildId = ? AND executorName = ?`,
+        ).run(guildId, row.executorName);
+      }
+    }
 
+    // Clean memberJoinAlerts table
+    const joinAlertRows = db
+      .prepare(`SELECT channelId FROM memberJoinAlerts WHERE guildId = ?`)
+      .all(guildId) as { channelId: string | null }[];
+    for (const row of joinAlertRows) {
+      if (row.channelId && isGone(row.channelId)) {
+        db.prepare(`DELETE FROM memberJoinAlerts WHERE guildId = ?`).run(guildId);
+      }
+    }
+  } catch (e) {
+    logger.error("Failed to auto-clean stale channels in /config:", e);
+  }
+}
+
+// ─── Row shapes ────────────────────────────────────────────────────────────
+
+type RobloxAlertRow = { channelId: string; robloxChannel: string; customContent: string };
+type TrackerRow = {
+  executorName: string;
+  displayName: string;
+  categoryId: string;
+  channelId: string | null;
+};
+type EmbedTrackerRow = {
+  executorName: string;
+  displayName: string;
+  channelId: string;
+  intervalMs: number | null;
+};
+type BotVoiceRow = {
+  categoryId: string;
+  voiceChannelId: string | null;
+  mode: string;
+  displayName: string;
+  robloxChannel: string;
+  omitPrefix?: number | boolean;
+};
+type ExecAlertRow = { channelId: string; executorName: string; displayName: string };
+type JoinAlertRow = { channelId: string; customMessage: string };
+
+/** Build the "Server Settings" overview embed for one guild. */
+function buildSettingsEmbed(guildId: string): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle("📋 Server Settings")
     .setColor(0x3b82f6)
     .setTimestamp()
     .setFooter({ text: "Diff Team" });
 
-  // ── Current Roblox versions (from channelState — no API call) ──────────
+  addVersionSection(embed);
+  addRobloxAlertsSection(embed, guildId);
+  addBotVoiceSection(embed, guildId);
+  addExecutorTrackerSections(embed, guildId);
+  addJoinAlertSection(embed, guildId);
+  addExecutorAlertSection(embed, guildId);
+
+  return embed;
+}
+
+// ─── Embed sections ────────────────────────────────────────────────────────
+
+/** Current Roblox versions, read from the cache — no API call. */
+function addVersionSection(embed: EmbedBuilder) {
   const versionLines = (["LIVE", "ZBeta"] as const).map((ch) => {
     const st = getChannelState(ch);
     if (!st) return `• **${ch}:** _Never detected_`;
@@ -187,8 +181,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     value: versionLines.join("\n"),
     inline: false,
   });
+}
 
-  // ── Roblox Update Alerts ────────────────────────────────────────────────
+/** Roblox update alert channels, split by Roblox channel. */
+function addRobloxAlertsSection(embed: EmbedBuilder, guildId: string) {
+  const robloxAlerts = db
+    .prepare(
+      `SELECT channelId, robloxChannel, customContent FROM alerts
+       WHERE guildId = ? AND enabled = 1 ORDER BY robloxChannel`,
+    )
+    .all(guildId) as RobloxAlertRow[];
+
   const liveAlerts = robloxAlerts.filter((a) => a.robloxChannel === "LIVE");
   const zbetaAlerts = robloxAlerts.filter((a) => a.robloxChannel === "ZBeta");
   const robloxLines: string[] = [];
@@ -208,8 +211,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     value: robloxLines.length > 0 ? robloxLines.join("\n") : "_Not configured_",
     inline: false,
   });
+}
 
-  // ── Bot Voice Status ───────────────────────────────────────────────────
+/** The channel the bot itself keeps renamed with its status. */
+function addBotVoiceSection(embed: EmbedBuilder, guildId: string) {
+  const botVoiceTracker = db
+    .prepare(
+      `SELECT categoryId, voiceChannelId, mode, displayName, robloxChannel, omitPrefix FROM botVoiceChannels
+       WHERE guildId = ? AND enabled = 1`,
+    )
+    .get(guildId) as BotVoiceRow | undefined;
+
   const botVoiceText = botVoiceTracker
     ? `• ${botVoiceTracker.voiceChannelId ? `<#${botVoiceTracker.voiceChannelId}>` : `Category \`${botVoiceTracker.categoryId}\``} (Mode: **${botVoiceTracker.mode === "custom" ? `Custom name "${botVoiceTracker.displayName}"` : `Roblox version ${botVoiceTracker.robloxChannel}`}**)`
     : "_Not configured_";
@@ -219,8 +231,31 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     value: botVoiceText,
     inline: false,
   });
+}
 
-  // ── Executor Voice Trackers ─────────────────────────────────────────────
+/** Executor trackers, one field per display mode. */
+function addExecutorTrackerSections(embed: EmbedBuilder, guildId: string) {
+  const voiceTrackers = db
+    .prepare(
+      `SELECT executorName, displayName, categoryId, voiceChannelId FROM executorStatusChannels
+       WHERE guildId = ? AND enabled = 1 ORDER BY executorName`,
+    )
+    .all(guildId) as (TrackerRow & { voiceChannelId: string | null })[];
+
+  const chatTrackers = db
+    .prepare(
+      `SELECT executorName, displayName, categoryId, channelId FROM executorChatStatusChannels
+       WHERE guildId = ? AND enabled = 1 ORDER BY executorName`,
+    )
+    .all(guildId) as TrackerRow[];
+
+  const embedTrackers = db
+    .prepare(
+      `SELECT executorName, displayName, channelId, intervalMs FROM executorEmbedStatusChannels
+       WHERE guildId = ? AND enabled = 1 ORDER BY executorName`,
+    )
+    .all(guildId) as EmbedTrackerRow[];
+
   embed.addFields({
     name: "🔊 Executor Tracking (Voice)",
     value:
@@ -235,7 +270,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     inline: false,
   });
 
-  // ── Executor Chat Status Trackers ────────────────────────────────────────
   embed.addFields({
     name: "💬 Executor Tracking (Text)",
     value:
@@ -250,7 +284,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     inline: false,
   });
 
-  // ── Executor Embed Status Trackers ───────────────────────────────────────
   embed.addFields({
     name: "📊 Executor Tracking (Embed)",
     value:
@@ -264,12 +297,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         : "_Not configured_",
     inline: false,
   });
+}
 
+/** The channel that greets new members. */
+function addJoinAlertSection(embed: EmbedBuilder, guildId: string) {
   const joinAlert = db
     .prepare(
       `SELECT channelId, customMessage FROM memberJoinAlerts WHERE guildId = ? AND enabled = 1`,
     )
-    .get(interaction.guildId) as { channelId: string; customMessage: string } | undefined;
+    .get(guildId) as JoinAlertRow | undefined;
 
   embed.addFields({
     name: "👋 New Member Alerts",
@@ -278,8 +314,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       : "_Not configured_",
     inline: false,
   });
+}
 
-  // ── Executor Alert Channels ─────────────────────────────────────────────
+/** Channels that get a message when an executor updates. */
+function addExecutorAlertSection(embed: EmbedBuilder, guildId: string) {
+  const execAlerts = db
+    .prepare(`SELECT channelId, executorName, displayName FROM executorAlerts WHERE guildId = ? AND enabled = 1`)
+    .all(guildId) as ExecAlertRow[];
+
   embed.addFields({
     name: "📢 Executor Update Alerts",
     value:
@@ -288,6 +330,4 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         : "_Not configured_",
     inline: false,
   });
-
-  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
