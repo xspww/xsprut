@@ -5,6 +5,7 @@ import {
   PermissionFlagsBits,
 } from "discord.js";
 import logger from "../lib/logger";
+import { isTimeoutError } from "../lib/errorMessage";
 import { fetchExecutorData } from "../monitoring/executorStatus";
 import { data } from "./executorStatus/data";
 import { handleTrack } from "./executorStatus/track";
@@ -24,7 +25,11 @@ export async function autocomplete(interaction: AutocompleteInteraction) {
 
     await interaction.respond(options);
   } catch (error) {
-    logger.error("Autocomplete error:", error);
+    if (isTimeoutError(error)) {
+      logger.warn("Autocomplete skipped — the WEAO API timed out");
+    } else {
+      logger.error("Autocomplete error:", error);
+    }
     await interaction.respond([]);
   }
 }

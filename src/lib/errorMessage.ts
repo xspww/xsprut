@@ -35,3 +35,14 @@ export function errorName(error: unknown): unknown {
   }
   return undefined;
 }
+
+/**
+ * Did our own fetch timeout fire?
+ *
+ * `AbortError` here means "the request did not answer in time", not "the code
+ * broke" — it is an expected condition on a slow or unreachable API and must
+ * not be reported with a stack trace.
+ */
+export function isTimeoutError(error: unknown): boolean {
+  return errorName(error) === "AbortError";
+}

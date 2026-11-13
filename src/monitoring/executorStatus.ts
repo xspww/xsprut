@@ -1,4 +1,3 @@
-import fetch from "node-fetch";
 import db from "../lib/db";
 import { client } from "../lib/client";
 import {
@@ -6,6 +5,7 @@ import {
   getRobloxVersionDetails,
 } from "../lib/robloxVersion";
 import { setWeaoRbxversionSnapshot } from "../lib/weaoVersions";
+import { fetchJsonWithRetry } from "../lib/http";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -32,7 +32,7 @@ import {
   EMBED_SCHEDULER_TICK_MS,
 } from "../lib/constants";
 import { interpolateV2Content, sendV2Message } from "../lib/v2Message";
-import { errorCode, errorMessage } from "../lib/errorMessage";
+import { errorCode, isTimeoutError } from "../lib/errorMessage";
 import {
   getChannelState,
   getExecutorLastState,
@@ -128,57 +128,31 @@ export function formatLastBanwave(detectionReason?: string): string | null {
   return day2 ? `${day1}-${day2}/${month}/${year}` : `${day1}/${month}/${year}`;
 }
 
-// Shared resilient retry loop: exponential backoff with FULL JITTER (delay
-// uniformly random in [0, base * 2^(n-1))). Rethrows the last error once all
-// attempts are exhausted — callers decide whether to swallow it or abort.
-const RETRY_BASE_DELAY_MS = 400;
-
-export async function withRetry<T>(
-  task: (attempt: number) => Promise<T>,
-  opts: { attempts?: number; label: string },
-): Promise<T> {
-  const attempts = opts.attempts ?? 3;
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
-      return await task(attempt);
-    } catch (e) {
-      lastError = e;
-      logger.warn(`Attempt ${attempt} ${opts.label} failed:`, errorMessage(e) ?? String(e));
-      if (attempt < attempts) {
-        const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        const delay = Math.floor(Math.random() * base);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-  }
-  throw lastError;
-}
+// Timeout for the WEAO exploit list — the same budget every other outbound
+// call gets (see lib/robloxVersion.ts and lib/weaoVersions.ts).
+const WEAO_FETCH_TIMEOUT_MS = 8_000;
 
 export async function fetchExecutorData(): Promise<WeaoExploit[]> {
   // Throws on total failure (after all attempts) so the monitoring tick aborts
   // instead of processing an empty exploit list (which would false-flag every
   // tracked executor as PATCHED). The monitoring loop logs the thrown error.
-  return withRetry(async () => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 5000);
-    try {
-      const response = await fetch(WEAO_EXPLOITS_URL, {
-        headers: { "User-Agent": "RobloxUpdateTracker/1.0" },
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`WEAO API returned HTTP ${response.status}`);
-      }
-      const data = (await response.json()) as WeaoExploit[];
-      // Publish the rbxversion snapshot for LIVE fallback (Tier-1, no extra
-      // request — see lib/weaoVersions.ts).
-      setWeaoRbxversionSnapshot(data.map((e) => e.rbxversion));
-      return data;
-    } finally {
-      clearTimeout(id); // always clear, even on non-ok responses
-    }
-  }, { attempts: 3, label: "to fetch WEAO exploits" });
+  //
+  // Uses the shared fetch helper like every other outbound call — 3 retries,
+  // an 8s timeout, and an AbortError classified as retriable. Rolling its own
+  // AbortController here is what made this call fail on a 5s budget while
+  // everything else got 8s.
+  const data = await fetchJsonWithRetry<WeaoExploit[]>(WEAO_EXPLOITS_URL, {
+    retries: 3,
+    timeoutMs: WEAO_FETCH_TIMEOUT_MS,
+    headers: { "User-Agent": "RobloxUpdateTracker/1.0" },
+  });
+  if (!data) {
+    throw new Error("WEAO API returned no exploit data");
+  }
+  // Publish the rbxversion snapshot for LIVE fallback (Tier-1, no extra
+  // request — see lib/weaoVersions.ts).
+  setWeaoRbxversionSnapshot(data.map((e) => e.rbxversion));
+  return data;
 }
 
 async function fetchRobloxLiveVersion(): Promise<string> {
@@ -816,7 +790,14 @@ async function embedSchedulerLoop() {
       try {
         await runEmbedSchedulerTick();
       } catch (e) {
-        logger.error("Embed scheduler tick failed:", e);
+        if (isTimeoutError(e)) {
+          // The WEAO API did not answer in time. The embeds keep their last
+          // state until the next tick — an expected condition on a slow
+          // network, not a defect worth a stack trace.
+          logger.warn("Embed scheduler tick skipped — the WEAO API timed out");
+        } else {
+          logger.error("Embed scheduler tick failed:", e);
+        }
       }
     });
   } finally {
@@ -1152,7 +1133,11 @@ export function startExecutorStatusMonitoring() {
     try {
       await updateExecutorStatusChannels();
     } catch (error) {
-      logger.error("Error while checking executor statuses:", error);
+      if (isTimeoutError(error)) {
+        logger.warn("Executor status check skipped — the WEAO API timed out");
+      } else {
+        logger.error("Error while checking executor statuses:", error);
+      }
     } finally {
       loopRunning = false;
     }

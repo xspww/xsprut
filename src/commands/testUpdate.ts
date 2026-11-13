@@ -18,6 +18,7 @@ import {
 } from "../monitoring/executorStatus";
 import { createJoinAlertContainer } from "../lib/joinAlertCard";
 import { sendV2Message } from "../lib/v2Message";
+import { isTimeoutError } from "../lib/errorMessage";
 
 export const data = new SlashCommandBuilder()
   .setName("test")
@@ -124,7 +125,15 @@ async function testRobloxZbeta(interaction: ChatInputCommandInteraction) {
 
 /** /test executor-alert — send an executor update to this server's channels. */
 async function testExecutorAlert(interaction: ChatInputCommandInteraction) {
-  const exploits = await fetchExecutorData();
+  let exploits: WeaoExploit[];
+  try {
+    exploits = await fetchExecutorData();
+  } catch (e) {
+    if (isTimeoutError(e)) {
+      return interaction.editReply("❌ Could not reach WEAO right now — please try again later");
+    }
+    throw e;
+  }
   const realVersion = await fetchRealVersionData("LIVE");
   const robloxVersion = realVersion?.hash ?? "N/A";
 
