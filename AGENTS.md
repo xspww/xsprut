@@ -16,6 +16,7 @@ npm start             # node dist/index.js (requires .env + DISCORD_BOT_TOKEN + 
 - `.env` must exist (`.env.example` is complete). Required: `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`. Multi-guild: comma-separated `DISCORD_GUILD_ID`. Never commit `.env`. `ecosystem.config.js` is also gitignored (machine-specific PM2 config).
 - `npm run register-commands` hits the Discord API. `register-commands.bat` exists on Windows.
 - Before a release: `docs/test-guild-checklist.md` covers Discord-facing behavior (embeds, captcha/code verification, protected room, permissions) that `npm test` does not cover. Run it in a throwaway server.
+- `docs/refactor-regression-checklist.md` covers what the 2026-11 refactor touched — the panel button routing, every split command and event handler, and the protected-room disable bug. Run it after any change to `src/commands/executorStatus/`, `src/events/*/`, `src/lib/panel/` or `src/monitoring/`.
 
 ## Architecture / entrypoints
 
