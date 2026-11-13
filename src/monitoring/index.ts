@@ -4,6 +4,7 @@ import {
   invalidateVersion,
   getChannelState,
   invalidateChannelState,
+  type ChannelStateRow,
 } from "../lib/dbCache";
 import { ROBLOX_CHANNELS, RobloxChannel } from "../lib/constants";
 import logger from "../lib/logger";
@@ -180,34 +181,8 @@ export async function checkChannel(channel: RobloxChannel): Promise<boolean> {
     return true;
   }
 
-  // Layer 1 — confirmation: require the same new hash on consecutive ticks
-  // before it can move state or alert. Single-tick jitter (CDN edge
-  // inconsistency, one-off fallback) dies here with no side effects.
-  if (!confirmationTracker.confirm(channel, hash)) {
-    // Only the first sighting is worth logging — later ticks in the same
-    // confirmation window are silent (they used to be silent too).
-    if (confirmationTracker.count(channel) === 1) {
-      logger.info(
-        `${channel}: new hash ${hash} seen${isFallback ? " (WEAO fallback)" : ""} — waiting for confirmation (1/${CONFIRM_REQUIRED}).`,
-      );
-    }
+  if (!passesConfirmation(channel, hash, isFallback, currentState, versionExists)) {
     return true;
-  }
-
-  // Layer 2 — fallback trust: a fallback hash that is already known (or is
-  // exactly the previous version) is stale lag, not a revert. Ignore it
-  // WITHOUT touching channelState — flipping state here is what poisoned
-  // `previousVersion` and made the next primary tick look like a revert back.
-  if (isFallback && currentState) {
-    const isStaleRevert = currentState.previousVersion === hash;
-    if (isStaleRevert || versionExists) {
-      logger.info(
-        `${channel}: ignoring stale WEAO fallback hash ${hash} (current=${currentState.currentVersion}, previous=${currentState.previousVersion ?? "none"}) — keeping primary state.`,
-      );
-      return true;
-    }
-    // A genuinely new hash via fallback is still allowed through to the
-    // normal update path below (it was confirmed above).
   }
 
   if (channel === "LIVE" && currentState) {
@@ -226,6 +201,51 @@ export async function checkChannel(channel: RobloxChannel): Promise<boolean> {
   }
 
   updateChannelState(channel, hash, version);
+  return true;
+}
+
+/**
+ * Layers 1 and 2 — may this hash move the state?
+ *
+ * Layer 1 — confirmation: require the same new hash on consecutive ticks
+ * before it can move state or alert. Single-tick jitter (CDN edge
+ * inconsistency, one-off fallback) dies here with no side effects.
+ *
+ * Layer 2 — fallback trust: a fallback hash that is already known (or is
+ * exactly the previous version) is stale lag, not a revert. Ignore it
+ * WITHOUT touching channelState — flipping state here is what poisoned
+ * `previousVersion` and made the next primary tick look like a revert back.
+ */
+function passesConfirmation(
+  channel: RobloxChannel,
+  hash: string,
+  isFallback: boolean,
+  currentState: ChannelStateRow | null,
+  versionExists: boolean,
+): boolean {
+  if (!confirmationTracker.confirm(channel, hash)) {
+    // Only the first sighting is worth logging — later ticks in the same
+    // confirmation window are silent (they used to be silent too).
+    if (confirmationTracker.count(channel) === 1) {
+      logger.info(
+        `${channel}: new hash ${hash} seen${isFallback ? " (WEAO fallback)" : ""} — waiting for confirmation (1/${CONFIRM_REQUIRED}).`,
+      );
+    }
+    return false;
+  }
+
+  if (isFallback && currentState) {
+    const isStaleRevert = currentState.previousVersion === hash;
+    if (isStaleRevert || versionExists) {
+      logger.info(
+        `${channel}: ignoring stale WEAO fallback hash ${hash} (current=${currentState.currentVersion}, previous=${currentState.previousVersion ?? "none"}) — keeping primary state.`,
+      );
+      return false;
+    }
+    // A genuinely new hash via fallback is still allowed through to the
+    // normal update path below (it was confirmed above).
+  }
+
   return true;
 }
 

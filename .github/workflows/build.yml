@@ -62,5 +62,20 @@ jobs:
       # JS analyzer enabled and the repo's own .slopconfig.yaml. The gate
       # fails the build on a critical deficit (score >= 70, 3+ critical
       # findings, inflated claim ratio, or an unresolved import dependency).
+      #
+      # The version is pinned on purpose: a new release can change the score,
+      # and an unpinned gate would start failing builds for reasons that have
+      # nothing to do with this repo. To bump it, change the pin, run
+      # `slop-detector scan . --js --config .slopconfig.yaml` locally, and
+      # check the score before letting CI enforce the new number.
       - name: Scan for AI slop
-        run: slop-detector scan . --js --config .slopconfig.yaml --ci-mode hard --ci-report
+        run: |
+          slop-detector scan . --js --config .slopconfig.yaml \
+            --ci-mode hard --ci-report --output slop-report.md
+
+      - name: Upload the slop report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-slop-report
+          path: slop-report.md

@@ -50,74 +50,93 @@ async function cleanupStaleChannels(guild: Guild, guildId: string) {
     const fetchedChannels = await guild.channels.fetch();
     const isGone = (channelId: string) => !fetchedChannels.has(channelId);
 
-    // Clean alerts table
-    const alertRows = db
-      .prepare(`SELECT channelId FROM alerts WHERE guildId = ?`)
-      .all(guildId) as { channelId: string }[];
-    for (const row of alertRows) {
-      if (isGone(row.channelId)) {
-        db.prepare(`DELETE FROM alerts WHERE guildId = ? AND channelId = ?`).run(guildId, row.channelId);
-      }
-    }
-    invalidateAlerts();
-
-    // Clean executorChatStatusChannels table
-    const chatRows = db
-      .prepare(`SELECT executorName, channelId FROM executorChatStatusChannels WHERE guildId = ?`)
-      .all(guildId) as { executorName: string; channelId: string | null }[];
-    for (const row of chatRows) {
-      if (row.channelId && isGone(row.channelId)) {
-        db.prepare(
-          `UPDATE executorChatStatusChannels SET channelId = NULL WHERE guildId = ? AND executorName = ?`,
-        ).run(guildId, row.executorName);
-      }
-    }
-
-    // Clean executorStatusChannels table
-    const voiceRows = db
-      .prepare(`SELECT executorName, voiceChannelId FROM executorStatusChannels WHERE guildId = ?`)
-      .all(guildId) as { executorName: string; voiceChannelId: string | null }[];
-    for (const row of voiceRows) {
-      if (row.voiceChannelId && isGone(row.voiceChannelId)) {
-        db.prepare(
-          `UPDATE executorStatusChannels SET voiceChannelId = NULL WHERE guildId = ? AND executorName = ?`,
-        ).run(guildId, row.executorName);
-      }
-    }
-
-    // Clean botVoiceChannels table
-    const botVoiceRows = db
-      .prepare(`SELECT voiceChannelId FROM botVoiceChannels WHERE guildId = ?`)
-      .all(guildId) as { voiceChannelId: string | null }[];
-    for (const row of botVoiceRows) {
-      if (row.voiceChannelId && isGone(row.voiceChannelId)) {
-        db.prepare(`UPDATE botVoiceChannels SET voiceChannelId = NULL WHERE guildId = ?`).run(guildId);
-      }
-    }
-
-    // Clean executorEmbedStatusChannels table
-    const embedRows = db
-      .prepare(`SELECT executorName, channelId FROM executorEmbedStatusChannels WHERE guildId = ?`)
-      .all(guildId) as { executorName: string; channelId: string | null }[];
-    for (const row of embedRows) {
-      if (row.channelId && isGone(row.channelId)) {
-        db.prepare(
-          `DELETE FROM executorEmbedStatusChannels WHERE guildId = ? AND executorName = ?`,
-        ).run(guildId, row.executorName);
-      }
-    }
-
-    // Clean memberJoinAlerts table
-    const joinAlertRows = db
-      .prepare(`SELECT channelId FROM memberJoinAlerts WHERE guildId = ?`)
-      .all(guildId) as { channelId: string | null }[];
-    for (const row of joinAlertRows) {
-      if (row.channelId && isGone(row.channelId)) {
-        db.prepare(`DELETE FROM memberJoinAlerts WHERE guildId = ?`).run(guildId);
-      }
-    }
+    cleanAlertChannels(guildId, isGone);
+    cleanChatStatusChannels(guildId, isGone);
+    cleanVoiceStatusChannels(guildId, isGone);
+    cleanBotVoiceChannel(guildId, isGone);
+    cleanEmbedStatusChannels(guildId, isGone);
+    cleanJoinAlertChannel(guildId, isGone);
   } catch (e) {
     logger.error("Failed to auto-clean stale channels in /config:", e);
+  }
+}
+
+/** Delete the alert rows whose channel is gone. */
+function cleanAlertChannels(guildId: string, isGone: (channelId: string) => boolean) {
+  const rows = db
+    .prepare(`SELECT channelId FROM alerts WHERE guildId = ?`)
+    .all(guildId) as { channelId: string }[];
+  for (const row of rows) {
+    if (isGone(row.channelId)) {
+      db.prepare(`DELETE FROM alerts WHERE guildId = ? AND channelId = ?`).run(guildId, row.channelId);
+    }
+  }
+  invalidateAlerts();
+}
+
+/** Detach the executor text-status rows whose channel is gone. */
+function cleanChatStatusChannels(guildId: string, isGone: (channelId: string) => boolean) {
+  const rows = db
+    .prepare(`SELECT executorName, channelId FROM executorChatStatusChannels WHERE guildId = ?`)
+    .all(guildId) as { executorName: string; channelId: string | null }[];
+  for (const row of rows) {
+    if (row.channelId && isGone(row.channelId)) {
+      db.prepare(
+        `UPDATE executorChatStatusChannels SET channelId = NULL WHERE guildId = ? AND executorName = ?`,
+      ).run(guildId, row.executorName);
+    }
+  }
+}
+
+/** Detach the executor voice-status rows whose channel is gone. */
+function cleanVoiceStatusChannels(guildId: string, isGone: (channelId: string) => boolean) {
+  const rows = db
+    .prepare(`SELECT executorName, voiceChannelId FROM executorStatusChannels WHERE guildId = ?`)
+    .all(guildId) as { executorName: string; voiceChannelId: string | null }[];
+  for (const row of rows) {
+    if (row.voiceChannelId && isGone(row.voiceChannelId)) {
+      db.prepare(
+        `UPDATE executorStatusChannels SET voiceChannelId = NULL WHERE guildId = ? AND executorName = ?`,
+      ).run(guildId, row.executorName);
+    }
+  }
+}
+
+/** Detach the bot voice-status row whose channel is gone. */
+function cleanBotVoiceChannel(guildId: string, isGone: (channelId: string) => boolean) {
+  const rows = db
+    .prepare(`SELECT voiceChannelId FROM botVoiceChannels WHERE guildId = ?`)
+    .all(guildId) as { voiceChannelId: string | null }[];
+  for (const row of rows) {
+    if (row.voiceChannelId && isGone(row.voiceChannelId)) {
+      db.prepare(`UPDATE botVoiceChannels SET voiceChannelId = NULL WHERE guildId = ?`).run(guildId);
+    }
+  }
+}
+
+/** Delete the executor embed-status rows whose channel is gone. */
+function cleanEmbedStatusChannels(guildId: string, isGone: (channelId: string) => boolean) {
+  const rows = db
+    .prepare(`SELECT executorName, channelId FROM executorEmbedStatusChannels WHERE guildId = ?`)
+    .all(guildId) as { executorName: string; channelId: string | null }[];
+  for (const row of rows) {
+    if (row.channelId && isGone(row.channelId)) {
+      db.prepare(
+        `DELETE FROM executorEmbedStatusChannels WHERE guildId = ? AND executorName = ?`,
+      ).run(guildId, row.executorName);
+    }
+  }
+}
+
+/** Delete the join-alert row whose channel is gone. */
+function cleanJoinAlertChannel(guildId: string, isGone: (channelId: string) => boolean) {
+  const rows = db
+    .prepare(`SELECT channelId FROM memberJoinAlerts WHERE guildId = ?`)
+    .all(guildId) as { channelId: string | null }[];
+  for (const row of rows) {
+    if (row.channelId && isGone(row.channelId)) {
+      db.prepare(`DELETE FROM memberJoinAlerts WHERE guildId = ?`).run(guildId);
+    }
   }
 }
 

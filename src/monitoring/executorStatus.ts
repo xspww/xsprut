@@ -14,6 +14,7 @@ import {
   ContainerBuilder,
   MessageFlags,
   PermissionFlagsBits,
+  type Message,
   SectionBuilder,
   SeparatorBuilder,
   TextDisplayBuilder,
@@ -253,43 +254,60 @@ export async function sendExecutorUpdateAlert(
   const verDisplay = exploit.version?.trim() || "N/A";
   const banwaveText = formatLastBanwave(exploit.detectionReason);
 
-  for (const { channelId, displayName, customContent } of alertChannels) {
-    const container = createExecutorUpdateContainer({
-      displayName,
-      verDisplay,
+  for (const alert of alertChannels) {
+    await sendExecutorAlertToChannel(alert, exploit, {
       robloxVersion,
+      verDisplay,
       banwaveText,
       nowUnix,
-      logoUrl: exploit.slug?.logo,
     });
+  }
+}
 
-    // Prepare custom content with placeholder support (same tokens as alerts)
-    const messageContent = interpolateV2Content(customContent, {
-      hash: verDisplay,
-      channel: robloxVersion,
-      version: verDisplay,
-      date: `<t:${nowUnix}:F>`,
-    });
+/** Send one executor-update card to one alert channel. */
+async function sendExecutorAlertToChannel(
+  alert: { channelId: string; displayName: string; customContent?: string },
+  exploit: WeaoExploit,
+  data: { robloxVersion: string; verDisplay: string; banwaveText: string | null; nowUnix: number },
+) {
+  const { channelId, displayName, customContent } = alert;
+  const { robloxVersion, verDisplay, banwaveText, nowUnix } = data;
 
-    // Send the Components v2 alert to the channel
-    try {
-      const ch = await client.channels.fetch(channelId);
-      if (ch?.isTextBased()) {
-        const sent = await sendV2Message(ch, [container], messageContent);
-        if (sent) {
-          const guildName = "guild" in ch && ch.guild ? ch.guild.name : "Unknown guild";
-          const channelName = "name" in ch ? `#${ch.name}` : channelId;
-          logger.info(`Executor update [${displayName}] -> ${guildName} ${channelName}`);
-        }
+  const container = createExecutorUpdateContainer({
+    displayName,
+    verDisplay,
+    robloxVersion,
+    banwaveText,
+    nowUnix,
+    logoUrl: exploit.slug?.logo,
+  });
+
+  // Prepare custom content with placeholder support (same tokens as alerts)
+  const messageContent = interpolateV2Content(customContent, {
+    hash: verDisplay,
+    channel: robloxVersion,
+    version: verDisplay,
+    date: `<t:${nowUnix}:F>`,
+  });
+
+  // Send the Components v2 alert to the channel
+  try {
+    const ch = await client.channels.fetch(channelId);
+    if (ch?.isTextBased()) {
+      const sent = await sendV2Message(ch, [container], messageContent);
+      if (sent) {
+        const guildName = "guild" in ch && ch.guild ? ch.guild.name : "Unknown guild";
+        const channelName = "name" in ch ? `#${ch.name}` : channelId;
+        logger.info(`Executor update [${displayName}] -> ${guildName} ${channelName}`);
       }
-    } catch (e) {
-      if (errorCode(e) === 10003) {
-        logger.warn(`Channel ${channelId} not found — removing from executorAlerts`);
-        db.prepare(`DELETE FROM executorAlerts WHERE channelId = ?`).run(channelId);
-        invalidateExecutorAlerts();
-      } else {
-        logger.error(`Failed to send executor alert to ${channelId}:`, e);
-      }
+    }
+  } catch (e) {
+    if (errorCode(e) === 10003) {
+      logger.warn(`Channel ${channelId} not found — removing from executorAlerts`);
+      db.prepare(`DELETE FROM executorAlerts WHERE channelId = ?`).run(channelId);
+      invalidateExecutorAlerts();
+    } else {
+      logger.error(`Failed to send executor alert to ${channelId}:`, e);
     }
   }
 }
@@ -444,13 +462,34 @@ async function findOrCreateVoiceChannel(cfg: ExecutorStatusConfig) {
 
 export async function updateExecutorStatusChannels() {
   const exploits = await fetchExecutorData();
-  const statusMap = new Map<string, WeaoExploit>();
-  for (const e of exploits) {
-    if (e.title) statusMap.set(normalizeName(e.title), e);
-  }
 
-  // Check version updates for text alerts
+  await updateExecutorLastState(exploits);
+
+  // Update voice channels
+  await updateExecutorVoiceChannels();
+
+  // Update chat status embeds (per-executor)
+  await updateExecutorChatStatusChannels();
+
+  // Embed Status messages are refreshed by startEmbedStatusScheduler()
+  // according to each row's intervalMs — do NOT call forceRefreshEmbeds() here.
+
+  // Update bot online voice status
+  await updateBotVoiceChannels();
+
+  // Update bot chat status (Roblox version)
+  await updateBotChatChannels();
+}
+
+/**
+ * Record the version and status of every executor, and alert on a new one.
+ *
+ * Deduplication: only alert if updateStatus is true AND a version exists AND
+ * the last alerted version differs from the current one.
+ */
+async function updateExecutorLastState(exploits: WeaoExploit[]) {
   let robloxVersion: string | null = null;
+
   for (const exploit of exploits) {
     if (!exploit.title) continue;
 
@@ -459,12 +498,12 @@ export async function updateExecutorStatusChannels() {
     const currentVersion = exploit.version?.trim() || null;
     const currentStatus = exploit.updateStatus ? "WORKING" : "PATCHED";
 
-    // Deduplication check: only alert if updateStatus is true AND version exists AND lastAlertedVersion != currentVersion
-    if (
+    const shouldAlert =
       exploit.updateStatus &&
       currentVersion &&
-      (!last || last.lastAlertedVersion !== currentVersion)
-    ) {
+      (!last || last.lastAlertedVersion !== currentVersion);
+
+    if (shouldAlert) {
       if (!robloxVersion) robloxVersion = await fetchRobloxLiveVersion();
       await sendExecutorUpdateAlert(exploit, robloxVersion, exploit.title);
 
@@ -481,8 +520,10 @@ export async function updateExecutorStatusChannels() {
     // The cache now holds stale data for this executor — drop it.
     invalidateExecutorLastState(exploit.title);
   }
+}
 
-  // Update voice channels
+/** Rename every tracked voice channel to its executor's status. */
+async function updateExecutorVoiceChannels() {
   const voiceConfigs = getVoiceConfigs();
   for (const cfg of voiceConfigs) {
     try {
@@ -495,18 +536,6 @@ export async function updateExecutorStatusChannels() {
       logger.error(`Failed to update voice channel for ${cfg.executorName}:`, error);
     }
   }
-
-  // Update chat status embeds (per-executor)
-  await updateExecutorChatStatusChannels();
-
-  // Embed Status messages are refreshed by startEmbedStatusScheduler()
-  // according to each row's intervalMs — do NOT call forceRefreshEmbeds() here.
-
-  // Update bot online voice status
-  await updateBotVoiceChannels();
-
-  // Update bot chat status (Roblox version)
-  await updateBotChatChannels();
 }
 
 // ─── Embed Status Channels ──────────────────────────────────────────────
@@ -568,40 +597,9 @@ async function applyEmbedStatusRows(
       const ch = await client.channels.fetch(row.channelId);
       if (!ch?.isTextBased() || !ch.isSendable()) continue;
 
-      let targetMsg = null;
-      if (row.messageId) {
-        try {
-          targetMsg = await ch.messages.fetch(row.messageId);
-        } catch {
-          logger.info(`Components V2 message ${row.messageId} was deleted in channel ${row.channelId} — will recreate`);
-        }
-      }
-
+      const targetMsg = await findEmbedStatusMessage(ch, row);
       if (targetMsg) {
-        // ComponentsV2 messages cannot use the legacy `content` field on edit.
-        // If we have custom content, inject it as a TextDisplay component so Discord accepts the request.
-        const isComponentsV2Edit = (targetMsg.flags?.bitfield ?? 0) & MessageFlags.IsComponentsV2;
-        if (isComponentsV2Edit && messageContent) {
-          const customTextDisplay = new TextDisplayBuilder().setContent(messageContent);
-          await targetMsg.edit({
-            components: [customTextDisplay, container],
-            flags: MessageFlags.IsComponentsV2,
-          });
-        } else if (isComponentsV2Edit) {
-          await targetMsg.edit({
-            components: [container],
-            flags: MessageFlags.IsComponentsV2,
-          });
-        } else {
-          // Existing message is NOT ComponentsV2 — we can't switch a regular message to V2 via edit,
-          // so delete the old message and send a fresh one.
-          try {
-            await targetMsg.delete();
-          } catch {
-            /* ignore */
-          }
-          await sendAndRememberEmbedMessage(row, ch, container, messageContent);
-        }
+        await editEmbedStatusMessage(targetMsg, ch, container, messageContent, row);
       } else {
         await sendAndRememberEmbedMessage(row, ch, container, messageContent);
       }
@@ -614,6 +612,65 @@ async function applyEmbedStatusRows(
       }
     }
   }
+}
+
+/** The status message of a row, or null when it was deleted. */
+async function findEmbedStatusMessage(
+  ch: TextBasedChannel,
+  row: EmbedStatusConfig,
+): Promise<Message | null> {
+  if (!row.messageId) return null;
+  try {
+    return await ch.messages.fetch(row.messageId);
+  } catch {
+    logger.info(
+      `Components V2 message ${row.messageId} was deleted in channel ${row.channelId} — will recreate`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Repaint an existing status message.
+ *
+ * A message that is not Components v2 cannot be switched to v2 by editing it,
+ * so it is deleted and a fresh one is sent instead.
+ */
+async function editEmbedStatusMessage(
+  targetMsg: Message,
+  ch: TextBasedChannel,
+  container: ContainerBuilder,
+  messageContent: string | undefined,
+  row: EmbedStatusConfig,
+) {
+  // ComponentsV2 messages cannot use the legacy `content` field on edit.
+  // If we have custom content, inject it as a TextDisplay component so Discord accepts the request.
+  const isComponentsV2Edit = (targetMsg.flags?.bitfield ?? 0) & MessageFlags.IsComponentsV2;
+
+  if (isComponentsV2Edit && messageContent) {
+    const customTextDisplay = new TextDisplayBuilder().setContent(messageContent);
+    await targetMsg.edit({
+      components: [customTextDisplay, container],
+      flags: MessageFlags.IsComponentsV2,
+    });
+    return;
+  }
+  if (isComponentsV2Edit) {
+    await targetMsg.edit({
+      components: [container],
+      flags: MessageFlags.IsComponentsV2,
+    });
+    return;
+  }
+
+  // Existing message is NOT ComponentsV2 — we can't switch a regular message to V2 via edit,
+  // so delete the old message and send a fresh one.
+  try {
+    await targetMsg.delete();
+  } catch {
+    /* ignore */
+  }
+  await sendAndRememberEmbedMessage(row, ch, container, messageContent);
 }
 
 /** Build the status card of one executor row. */
@@ -757,49 +814,7 @@ async function embedSchedulerLoop() {
   try {
     await runSerialized(async () => {
       try {
-        const rows = db
-          .prepare(
-            `SELECT guildId, channelId, executorName, intervalMs FROM executorEmbedStatusChannels WHERE enabled = 1`,
-          )
-          .all() as { guildId: string; channelId: string; executorName: string; intervalMs: number | null }[];
-
-        if (rows.length === 0) return;
-
-        const now = Date.now();
-        const due: typeof rows = [];
-        const seenKeys = new Set<string>();
-
-        for (const r of rows) {
-          const key = embedRowKey(r);
-          seenKeys.add(key);
-          const interval = r.intervalMs && r.intervalMs > 0 ? r.intervalMs : EMBED_REFRESH_INTERVAL_DEFAULT_MS;
-          const last = lastEmbedRefreshAt.get(key) ?? 0;
-          if (now - last >= interval) due.push(r);
-        }
-
-        // Garbage-collect keys for rows that no longer exist
-        for (const key of Array.from(lastEmbedRefreshAt.keys())) {
-          if (!seenKeys.has(key)) lastEmbedRefreshAt.delete(key);
-        }
-
-        if (due.length === 0) return;
-
-        const exploits = await fetchExecutorData();
-        const statusMap = new Map<string, WeaoExploit>();
-        for (const e of exploits) {
-          if (e.title) statusMap.set(normalizeName(e.title), e);
-        }
-
-        // Refresh only the due rows by re-using the per-row update path
-        for (const r of due) {
-          const key = embedRowKey(r);
-          try {
-            await refreshSingleEmbedStatusRow(r, statusMap);
-            lastEmbedRefreshAt.set(key, Date.now());
-          } catch (e) {
-            logger.error(`Embed scheduler failed for ${r.executorName} in ${r.channelId}:`, e);
-          }
-        }
+        await runEmbedSchedulerTick();
       } catch (e) {
         logger.error("Embed scheduler tick failed:", e);
       }
@@ -807,6 +822,65 @@ async function embedSchedulerLoop() {
   } finally {
     embedSchedulerRunning = false;
   }
+}
+
+/** One pass of the embed scheduler: refresh the rows whose interval is up. */
+async function runEmbedSchedulerTick() {
+  const rows = db
+    .prepare(
+      `SELECT guildId, channelId, executorName, intervalMs FROM executorEmbedStatusChannels WHERE enabled = 1`,
+    )
+    .all() as { guildId: string; channelId: string; executorName: string; intervalMs: number | null }[];
+
+  if (rows.length === 0) return;
+
+  const due = collectDueEmbedRows(rows);
+  if (due.length === 0) return;
+
+  const exploits = await fetchExecutorData();
+  const statusMap = new Map<string, WeaoExploit>();
+  for (const e of exploits) {
+    if (e.title) statusMap.set(normalizeName(e.title), e);
+  }
+
+  // Refresh only the due rows by re-using the per-row update path
+  for (const r of due) {
+    const key = embedRowKey(r);
+    try {
+      await refreshSingleEmbedStatusRow(r, statusMap);
+      lastEmbedRefreshAt.set(key, Date.now());
+    } catch (e) {
+      logger.error(`Embed scheduler failed for ${r.executorName} in ${r.channelId}:`, e);
+    }
+  }
+}
+
+/**
+ * The rows whose refresh interval has elapsed.
+ *
+ * Also garbage-collects the bookkeeping keys of rows that no longer exist.
+ */
+function collectDueEmbedRows(
+  rows: { guildId: string; channelId: string; executorName: string; intervalMs: number | null }[],
+): typeof rows {
+  const now = Date.now();
+  const due: typeof rows = [];
+  const seenKeys = new Set<string>();
+
+  for (const r of rows) {
+    const key = embedRowKey(r);
+    seenKeys.add(key);
+    const interval = r.intervalMs && r.intervalMs > 0 ? r.intervalMs : EMBED_REFRESH_INTERVAL_DEFAULT_MS;
+    const last = lastEmbedRefreshAt.get(key) ?? 0;
+    if (now - last >= interval) due.push(r);
+  }
+
+  // Garbage-collect keys for rows that no longer exist
+  for (const key of Array.from(lastEmbedRefreshAt.keys())) {
+    if (!seenKeys.has(key)) lastEmbedRefreshAt.delete(key);
+  }
+
+  return due;
 }
 
 /**

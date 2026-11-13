@@ -67,7 +67,22 @@ async function handleNavigationButton(
     return true;
   }
 
-  // Refresh (view-aware)
+  if (await handleRefreshButton(interaction, guildId, customId)) return true;
+  if (await handleCategoryButton(interaction, guildId, customId)) return true;
+
+  return false;
+}
+
+/**
+ * The refresh buttons — they re-render the view the user is already on.
+ *
+ * Returns true when the button was handled.
+ */
+async function handleRefreshButton(
+  interaction: ButtonInteraction,
+  guildId: string,
+  customId: string,
+): Promise<boolean> {
   if (customId === "panel:refresh") {
     await interaction.update({ components: [buildMainMenu()], flags: MessageFlags.IsComponentsV2 });
     return true;
@@ -86,8 +101,19 @@ async function handleNavigationButton(
     await interaction.update({ components: [buildStatusPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
     return true;
   }
+  return false;
+}
 
-  // Category navigation
+/**
+ * The category buttons — they open a section of the panel.
+ *
+ * Returns true when the button was handled.
+ */
+async function handleCategoryButton(
+  interaction: ButtonInteraction,
+  guildId: string,
+  customId: string,
+): Promise<boolean> {
   if (customId === "panel:verify") {
     await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
     return true;
@@ -101,27 +127,23 @@ async function handleNavigationButton(
     await interaction.update({ components: [buildStatusPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
     return true;
   }
-  if (
-    customId === "panel:alerts" ||
-    customId === "panel:executor" ||
-    customId === "panel:join" ||
-    customId === "panel:config" ||
-    customId === "panel:cleanup"
-  ) {
-    const infoMap: Record<string, { title: string; hint: string }> = {
-      "panel:alerts": { title: "📡 Roblox Alerts", hint: "ใช้ `/robloxalert add` `/robloxalert remove` `/robloxalert list`" },
-      "panel:executor": { title: "🤖 Executor Status", hint: "ใช้ `/executorStatus track add|remove|edit` `/executorStatus config`" },
-      "panel:join": { title: "👋 Join Alert", hint: "ใช้ `/joinalert enable|disable|setchannel|setmessage`" },
-      "panel:config": { title: "⚙️ General Config", hint: "ใช้ `/config`" },
-      "panel:cleanup": { title: "🧹 Cleanup", hint: "ใช้ `/cleanup`" },
-    };
-    const info = infoMap[customId];
+
+  const info = COMING_SOON_PANELS[customId];
+  if (info) {
     await interaction.update({ components: [buildComingSoonPanel(info.title, info.hint)], flags: MessageFlags.IsComponentsV2 });
     return true;
   }
-
   return false;
 }
+
+/** The sections that only point at the slash command that does the work. */
+const COMING_SOON_PANELS: Record<string, { title: string; hint: string }> = {
+  "panel:alerts": { title: "📡 Roblox Alerts", hint: "ใช้ `/robloxalert add` `/robloxalert remove` `/robloxalert list`" },
+  "panel:executor": { title: "🤖 Executor Status", hint: "ใช้ `/executorStatus track add|remove|edit` `/executorStatus config`" },
+  "panel:join": { title: "👋 Join Alert", hint: "ใช้ `/joinalert enable|disable|setchannel|setmessage`" },
+  "panel:config": { title: "⚙️ General Config", hint: "ใช้ `/config`" },
+  "panel:cleanup": { title: "🧹 Cleanup", hint: "ใช้ `/cleanup`" },
+};
 
 /**
  * The verification buttons: edit, re-post and disable.
@@ -243,54 +265,90 @@ async function handleProtectButton(
   guildId: string,
   customId: string,
 ): Promise<boolean> {
+  const action = protectButtonAction(customId);
+  if (!action) return false;
+
+  switch (action.kind) {
+    case "edit":
+      await showProtectBannerModal(interaction, action.channelId);
+      return true;
+    case "switch-action":
+      await switchProtectAction(interaction, guildId, action.channelId);
+      return true;
+    case "timeout":
+      await openTimeoutModal(interaction, guildId, action.channelId);
+      return true;
+    case "disable-confirm":
+      await disableProtectRoom(interaction, guildId, action.channelId);
+      return true;
+    case "disable":
+      await interaction.update({
+        components: [buildProtectDisableConfirm(action.channelId)],
+        flags: MessageFlags.IsComponentsV2,
+      });
+      return true;
+    case "repost":
+      await repostProtectNotice(interaction, guildId, action.channelId);
+      return true;
+  }
+}
+
+/** What a protected-room button asks the panel to do. */
+export type ProtectButtonAction =
+  | { kind: "edit"; channelId: string }
+  | { kind: "switch-action"; channelId: string }
+  | { kind: "timeout"; channelId: string }
+  | { kind: "disable-confirm"; channelId: string }
+  | { kind: "disable"; channelId: string }
+  | { kind: "repost"; channelId: string };
+
+/**
+ * Which protected-room action a button customId asks for.
+ *
+ * The order matters: "panel:protect:disable:" is a prefix of
+ * "panel:protect:disable:confirm:", so the confirm button has to be matched
+ * first. The other way round the confirm button only re-shows the
+ * confirmation card and the room is never actually turned off.
+ */
+export function protectButtonAction(customId: string): ProtectButtonAction | null {
+  if (customId.startsWith("panel:protect:disable:confirm:")) {
+    return { kind: "disable-confirm", channelId: customId.split(":")[4] ?? "" };
+  }
+  if (customId.startsWith("panel:protect:disable:")) {
+    return { kind: "disable", channelId: customId.split(":")[3] ?? "" };
+  }
   if (customId.startsWith("panel:protect:edit:")) {
-    const channelId = customId.split(":")[3];
-    const modal = new ModalBuilder()
-      .setCustomId(`panel:protect:edit:modal:${channelId}`)
-      .setTitle("Edit Protected Room Banner");
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-          .setCustomId("banner")
-          .setLabel("Banner URL (หรือ 'clear')")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(500)
-          .setValue(""),
-      ),
-    );
-    await interaction.showModal(modal);
-    return true;
+    return { kind: "edit", channelId: customId.split(":")[3] ?? "" };
   }
   if (customId.startsWith("panel:protect:action:")) {
-    await switchProtectAction(interaction, guildId, customId.split(":")[3]);
-    return true;
+    return { kind: "switch-action", channelId: customId.split(":")[3] ?? "" };
   }
   if (customId.startsWith("panel:protect:timeout:")) {
-    await openTimeoutModal(interaction, guildId, customId.split(":")[3]);
-    return true;
-  }
-  // NOTE: the order of the next two branches matters. "panel:protect:disable:"
-  // is a prefix of "panel:protect:disable:confirm:", so the confirm card is
-  // matched first and the confirm handler below is never reached. This is
-  // the behaviour of the original single-function handler, kept as-is here —
-  // see the fix in the follow-up commit.
-  if (customId.startsWith("panel:protect:disable:")) {
-    await interaction.update({
-      components: [buildProtectDisableConfirm(customId.split(":")[3])],
-      flags: MessageFlags.IsComponentsV2,
-    });
-    return true;
-  }
-  if (customId.startsWith("panel:protect:disable:confirm:")) {
-    await disableProtectRoom(interaction, guildId, customId.split(":")[4]);
-    return true;
+    return { kind: "timeout", channelId: customId.split(":")[3] ?? "" };
   }
   if (customId.startsWith("panel:protect:repost:")) {
-    await repostProtectNotice(interaction, guildId, customId.split(":")[3]);
-    return true;
+    return { kind: "repost", channelId: customId.split(":")[3] ?? "" };
   }
-  return false;
+  return null;
+}
+
+/** Open the modal that edits the protected-room banner. */
+async function showProtectBannerModal(interaction: ButtonInteraction, channelId: string) {
+  const modal = new ModalBuilder()
+    .setCustomId(`panel:protect:edit:modal:${channelId}`)
+    .setTitle("Edit Protected Room Banner");
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(
+      new TextInputBuilder()
+        .setCustomId("banner")
+        .setLabel("Banner URL (หรือ 'clear')")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(500)
+        .setValue(""),
+    ),
+  );
+  await interaction.showModal(modal);
 }
 
 /** The "turn the protected room off" confirmation card. */

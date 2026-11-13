@@ -138,16 +138,7 @@ async function verifySetup(interaction: ChatInputCommandInteraction) {
   // when the command definition has not been re-registered yet; silently
   // dropping a Code-mode server to Captcha would also invalidate its codes.
   const previous = getVerificationConfig(interaction.guildId);
-  const mode = resolveRequestedMode(interaction, previous);
-  const embedTitle = interaction.options.getString("title") ?? "Verify yourself";
-  const embedDescription =
-    interaction.options.getString("description") ??
-    (mode === "code"
-      ? "Click the button below and enter the code that came with your invite."
-      : "Click the button below and solve the short captcha to unlock the server.");
-  const successMessage =
-    interaction.options.getString("success_message") ??
-    "You're verified. Welcome to {server}!";
+  const settings = readVerifySettings(interaction, previous);
 
   const storedImage = await resolveStoredBanner(interaction, previous?.imageUrl ?? null);
   if (storedImage === undefined) return;
@@ -165,11 +156,11 @@ async function verifySetup(interaction: ChatInputCommandInteraction) {
     channelId: targetChannel.id,
     verifiedRoleId: verifiedRole.id,
     unverifiedRoleId: unverifiedRole?.id ?? null,
-    embedTitle,
-    embedDescription,
-    successMessage,
+    embedTitle: settings.embedTitle,
+    embedDescription: settings.embedDescription,
+    successMessage: settings.successMessage,
     imageUrl: storedImage,
-    verificationMode: mode,
+    verificationMode: settings.mode,
     createdAt: Date.now(),
   });
   // Swap happened — drop the replaced local copy (no-op for URLs).
@@ -180,15 +171,15 @@ async function verifySetup(interaction: ChatInputCommandInteraction) {
   // code. Staying in Code mode must not wipe codes still in circulation.
   // (Unconditional for non-Code modes so stale rows from a manually
   // disabled config cannot revive if Code mode is re-enabled later.)
-  if (mode !== "code") {
+  if (settings.mode !== "code") {
     deleteInviteCodesForGuild(interaction.guildId);
   }
 
   // Build the public verify panel as a Components v2 container.
   const container = buildVerifyPublicContainer({
-    embedTitle,
-    embedDescription,
-    mode,
+    embedTitle: settings.embedTitle,
+    embedDescription: settings.embedDescription,
+    mode: settings.mode,
     imageUrl: storedImage,
   });
 
@@ -200,11 +191,39 @@ async function verifySetup(interaction: ChatInputCommandInteraction) {
   updatePanelMessageId(interaction.guildId, sentPanel.id);
 
   return interaction.editReply(buildSetupReply({
-    mode,
+    mode: settings.mode,
     verifiedRole,
     unverifiedRole,
     targetChannel,
   }));
+}
+
+/** The panel texts and mode the user asked for. */
+type VerifySettings = {
+  mode: VerificationMode;
+  embedTitle: string;
+  embedDescription: string;
+  successMessage: string;
+};
+
+/** Read the panel texts and the mode out of the command options. */
+function readVerifySettings(
+  interaction: ChatInputCommandInteraction,
+  previous: ReturnType<typeof getVerificationConfig>,
+): VerifySettings {
+  const mode = resolveRequestedMode(interaction, previous);
+  return {
+    mode,
+    embedTitle: interaction.options.getString("title") ?? "Verify yourself",
+    embedDescription:
+      interaction.options.getString("description") ??
+      (mode === "code"
+        ? "Click the button below and enter the code that came with your invite."
+        : "Click the button below and solve the short captcha to unlock the server."),
+    successMessage:
+      interaction.options.getString("success_message") ??
+      "You're verified. Welcome to {server}!",
+  };
 }
 
 /** The verification mode to apply — the option, or the one already stored. */

@@ -178,14 +178,35 @@ export function renderCaptchaImage(code: string): Buffer {
     png.data[idx + 3] = 255;
   };
 
-  // Background fill
+  fillBackground(setPixel, width, height, bg);
+  compositeDigits(setPixel, transforms, maxH, fg);
+  drawInterferenceLines(setPixel, width, height);
+  scatterNoise(setPixel, width, height);
+
+  return PNG.sync.write(png);
+}
+
+/** Fill the whole canvas with the background colour. */
+function fillBackground(
+  setPixel: (x: number, y: number, color: number[]) => void,
+  width: number,
+  height: number,
+  bg: number[],
+) {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       setPixel(x, y, bg);
     }
   }
+}
 
-  // Composite the rotated digits
+/** Draw the rotated digit bitmaps onto the canvas. */
+function compositeDigits(
+  setPixel: (x: number, y: number, color: number[]) => void,
+  transforms: { pixels: boolean[][]; w: number; h: number; dy: number }[],
+  maxH: number,
+  fg: number[],
+) {
   let x = PAD_PX;
   for (const t of transforms) {
     const y = PAD_PX + Math.floor((maxH - t.h) / 2) + t.dy;
@@ -196,8 +217,14 @@ export function renderCaptchaImage(code: string): Buffer {
     }
     x += t.w + GAP_PX;
   }
+}
 
-  // Random interference lines crossing the image (2–4 lines, gray shades)
+/** Random interference lines crossing the image (2–4 lines, gray shades). */
+function drawInterferenceLines(
+  setPixel: (x: number, y: number, color: number[]) => void,
+  width: number,
+  height: number,
+) {
   const lineCount = 2 + Math.floor(Math.random() * 3);
   for (let i = 0; i < lineCount; i++) {
     const [x0, y0] = randomEdgePoint(width, height);
@@ -205,8 +232,14 @@ export function renderCaptchaImage(code: string): Buffer {
     const g = 80 + Math.floor(Math.random() * 120);
     drawLine(setPixel, x0, y0, x1, y1, [g, g, g], 1 + Math.floor(Math.random() * 2));
   }
+}
 
-  // Scattered noise pixels in random colors
+/** Scattered noise pixels in random colors. */
+function scatterNoise(
+  setPixel: (x: number, y: number, color: number[]) => void,
+  width: number,
+  height: number,
+) {
   const noiseCount = Math.floor((width * height) / 40);
   for (let i = 0; i < noiseCount; i++) {
     const nx = Math.floor(Math.random() * width);
@@ -218,6 +251,4 @@ export function renderCaptchaImage(code: string): Buffer {
     ];
     setPixel(nx, ny, color);
   }
-
-  return PNG.sync.write(png);
 }

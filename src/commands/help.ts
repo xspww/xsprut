@@ -173,19 +173,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   try {
     const descMap = buildDescriptionMap();
 
-    const fields: { name: string; value: string }[] = [];
-    const coveredPaths = new Set<string>();
-
-    for (const group of HELP_GROUPS) {
-      const lines: string[] = [];
-      for (const path of group.entries) {
-        coveredPaths.add(path);
-        const desc = shortDesc(descMap.get(path) ?? "—");
-        lines.push(`\`${path}\`  ${desc}`);
-      }
-      const groupName = `${group.emoji}  ${group.name}  ·  ${group.entries.length}`;
-      fields.push(...chunkLines(groupName, lines));
-    }
+    const { fields, coveredPaths } = buildGroupFields(descMap);
 
     // Future-proofing: any registered command not curated above shows up in "Other".
     const uncategorized = Array.from(descMap.keys())
@@ -229,4 +217,26 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       });
     }
   }
+}
+
+/** The embed fields of the curated groups, and the paths they covered. */
+function buildGroupFields(descMap: Map<string, string>): {
+  fields: { name: string; value: string }[];
+  coveredPaths: Set<string>;
+} {
+  const fields: { name: string; value: string }[] = [];
+  const coveredPaths = new Set<string>();
+
+  for (const group of HELP_GROUPS) {
+    const lines: string[] = [];
+    for (const path of group.entries) {
+      coveredPaths.add(path);
+      const desc = shortDesc(descMap.get(path) ?? "—");
+      lines.push(`\`${path}\`  ${desc}`);
+    }
+    const groupName = `${group.emoji}  ${group.name}  ·  ${group.entries.length}`;
+    fields.push(...chunkLines(groupName, lines));
+  }
+
+  return { fields, coveredPaths };
 }

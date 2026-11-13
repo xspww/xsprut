@@ -186,46 +186,15 @@ async function handleCaptchaModal(interaction: ModalSubmitInteraction): Promise<
     });
   }
 
-  const cfg = getVerificationConfig(guildId);
-  if (!cfg) {
-    return interaction.reply({
-      content: "❌ Verification is not set up in this server",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  if (cfg.verificationMode !== "captcha") {
-    return interaction.reply({
-      content: "❌ Captcha verification is not enabled in this server",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  const cfg = await requireVerificationMode(interaction, guildId, "captcha");
+  if (!cfg) return undefined;
 
   const inputCode = interaction.fields.getTextInputValue("captcha_input").trim();
   const result = validateCaptchaSession(user.id, inputCode);
 
-  if (result === "expired") {
-    return interaction.reply({
-      content: "⏰ The code has expired. Please press **Verify** again",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  if (result === "not_found") {
-    return interaction.reply({
-      content: "❓ Session not found. Please press **Verify** again",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  if (result === "wrong") {
-    return interaction.reply({
-      content: "❌ Incorrect code. Please press **Verify** again",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  if (result === "locked") {
-    return interaction.reply({
-      content: "🚫 Too many incorrect attempts. Please press **Verify** to get a new code",
-      flags: MessageFlags.Ephemeral,
-    });
+  const rejection = captchaRejection(result);
+  if (rejection) {
+    return interaction.reply({ content: rejection, flags: MessageFlags.Ephemeral });
   }
 
   // ✅ Correct! Acknowledge before the role REST calls so a slow fetch /
@@ -241,8 +210,18 @@ async function handleCaptchaModal(interaction: ModalSubmitInteraction): Promise<
     });
   }
 
-  const successMsg = cfg.successMessage.replace("{server}", guild.name);
-  return interaction.editReply({ content: `✅ ${successMsg}` });
+  return confirmVerified(interaction, guild, cfg);
+}
+
+/** The reply for a rejected captcha, or null when the code was correct. */
+function captchaRejection(result: string): string | null {
+  if (result === "expired") return "⏰ The code has expired. Please press **Verify** again";
+  if (result === "not_found") return "❓ Session not found. Please press **Verify** again";
+  if (result === "wrong") return "❌ Incorrect code. Please press **Verify** again";
+  if (result === "locked") {
+    return "🚫 Too many incorrect attempts. Please press **Verify** to get a new code";
+  }
+  return null;
 }
 
 /** Code mode — check the single-use code that came with the invite. */
@@ -255,38 +234,15 @@ async function handleInviteCodeModal(interaction: ModalSubmitInteraction): Promi
     });
   }
 
-  const cfg = getVerificationConfig(guildId);
-  if (!cfg) {
-    return interaction.reply({
-      content: "❌ Verification is not set up in this server",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  if (cfg.verificationMode !== "code") {
-    return interaction.reply({
-      content: "❌ Code verification is not enabled in this server",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  const cfg = await requireVerificationMode(interaction, guildId, "code");
+  if (!cfg) return undefined;
 
   const inputCode = interaction.fields.getTextInputValue("invite_code_input").trim();
   const validation = validateInviteCode(guildId, inputCode);
 
-  if (validation.status === "expired") {
-    return interaction.reply({
-      content: "⏰ This code has expired. Ask the member who invited you for a new invite and code.",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  if (validation.status === "used") {
-    return interaction.reply({
-      content: "🚫 This code has already been used. Each invite code works only once.",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
   if (validation.status !== "correct") {
     return interaction.reply({
-      content: "❌ Invalid or expired code. Check the `XXXX-XXX-XXXX` code that came with your invite.",
+      content: inviteCodeRejection(validation.status),
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -317,6 +273,58 @@ async function handleInviteCodeModal(interaction: ModalSubmitInteraction): Promi
     });
   }
 
+  return confirmVerified(interaction, guild, cfg);
+}
+
+/** The reply for a rejected invite code. */
+function inviteCodeRejection(status: string): string {
+  if (status === "expired") {
+    return "⏰ This code has expired. Ask the member who invited you for a new invite and code.";
+  }
+  if (status === "used") {
+    return "🚫 This code has already been used. Each invite code works only once.";
+  }
+  return "❌ Invalid or expired code. Check the `XXXX-XXX-XXXX` code that came with your invite.";
+}
+
+/**
+ * Check that this server runs the expected verification mode.
+ *
+ * Replies and returns null when the setup is missing or in the wrong mode.
+ */
+async function requireVerificationMode(
+  interaction: ModalSubmitInteraction,
+  guildId: string,
+  mode: "captcha" | "code",
+): Promise<VerificationConfig | null> {
+  const cfg = getVerificationConfig(guildId);
+  if (!cfg) {
+    await interaction.reply({
+      content: "❌ Verification is not set up in this server",
+      flags: MessageFlags.Ephemeral,
+    });
+    return null;
+  }
+  if (cfg.verificationMode !== mode) {
+    await interaction.reply({
+      content:
+        mode === "code"
+          ? "❌ Code verification is not enabled in this server"
+          : "❌ Captcha verification is not enabled in this server",
+      flags: MessageFlags.Ephemeral,
+    });
+    return null;
+  }
+
+  return cfg;
+}
+
+/** Tell the user they are verified. The reply was already deferred. */
+function confirmVerified(
+  interaction: ModalSubmitInteraction,
+  guild: Guild,
+  cfg: VerificationConfig,
+) {
   const successMsg = cfg.successMessage.replace("{server}", guild.name);
   return interaction.editReply({ content: `✅ ${successMsg}` });
 }

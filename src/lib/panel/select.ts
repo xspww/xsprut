@@ -46,31 +46,7 @@ export async function handlePanelSelect(interaction: PanelSelectInteraction) {
 
   // ── Verify verified role select (role) ──
   if (customId === "panel:verify:role:verified") {
-    const roleId =
-      interaction.values?.[0] ?? ("roles" in interaction ? interaction.roles.first()?.id : undefined);
-    if (!roleId) {
-      await interaction.reply({ content: "❌ ไม่ได้เลือก role", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const cfg = getVerificationConfig(guildId);
-    if (!cfg) {
-      await interaction.reply({ content: "❌ ยังไม่ได้ตั้งค่า", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const { saveVerificationConfig } = await import("../verifyManager.js");
-    saveVerificationConfig({
-      guildId,
-      channelId: cfg.channelId,
-      verifiedRoleId: roleId,
-      unverifiedRoleId: cfg.unverifiedRoleId,
-      embedTitle: cfg.embedTitle,
-      embedDescription: cfg.embedDescription,
-      successMessage: cfg.successMessage,
-      imageUrl: cfg.imageUrl,
-      verificationMode: cfg.verificationMode,
-      createdAt: cfg.createdAt,
-    });
-    await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
+    await applyVerifiedRole(interaction, guildId);
     return;
   }
 
@@ -81,6 +57,38 @@ export async function handlePanelSelect(interaction: PanelSelectInteraction) {
   }
 
   await interaction.reply({ content: "❌ Select ไม่รู้จัก", flags: MessageFlags.Ephemeral });
+}
+
+/** Change the role the verification grants. */
+async function applyVerifiedRole(
+  interaction: PanelSelectInteraction,
+  guildId: string,
+) {
+  const roleId =
+    interaction.values?.[0] ?? ("roles" in interaction ? interaction.roles.first()?.id : undefined);
+  if (!roleId) {
+    await interaction.reply({ content: "❌ ไม่ได้เลือก role", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const cfg = getVerificationConfig(guildId);
+  if (!cfg) {
+    await interaction.reply({ content: "❌ ยังไม่ได้ตั้งค่า", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const { saveVerificationConfig } = await import("../verifyManager.js");
+  saveVerificationConfig({
+    guildId,
+    channelId: cfg.channelId,
+    verifiedRoleId: roleId,
+    unverifiedRoleId: cfg.unverifiedRoleId,
+    embedTitle: cfg.embedTitle,
+    embedDescription: cfg.embedDescription,
+    successMessage: cfg.successMessage,
+    imageUrl: cfg.imageUrl,
+    verificationMode: cfg.verificationMode,
+    createdAt: cfg.createdAt,
+  });
+  await interaction.update({ components: [buildVerifyPanel(guildId)], flags: MessageFlags.IsComponentsV2 });
 }
 
 /** Switch the verification mode and re-post the public panel message. */

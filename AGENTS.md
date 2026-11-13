@@ -59,6 +59,7 @@ slop-detector scan . --js --config .slopconfig.yaml --ci-mode hard --ci-report
 - `.slopconfig.yaml` holds the ignore list. **A config file replaces the built-in ignore list instead of extending it**, so the defaults are repeated in that file on purpose — drop one and `dist/` or `tests/` come back into the scan.
 - `patterns.disabled` and `god_function.domain_overrides` only reach the Python pattern registry. The JS/TS analyzer hardcodes its thresholds (50 lines / complexity 10 / nesting depth 4), so a god function has to be split in the code — it cannot be waived from the config.
 - The detector's `review` / `pulse` / `sweep` commands read only the Python file results, so they return empty for this repo. The `scan` command and `--ci-mode` gate do work.
+- The CI job pins `ai-slop-detector` to an exact version. A new release can change the score, so bumping the pin is a deliberate step: change it, run the scan locally, and check the number before letting CI enforce it. The gate report is uploaded as the `ai-slop-report` artifact.
 
 ## What to trust
 

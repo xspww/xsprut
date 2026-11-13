@@ -15,7 +15,7 @@ export {
   buildVerifyPanel,
   buildVerifyPublicContainer,
 } from "./panel/builders";
-export { handlePanelButton } from "./panel/button";
+export { handlePanelButton, protectButtonAction, type ProtectButtonAction } from "./panel/button";
 export { handlePanelModal } from "./panel/modal";
 export { handlePanelSelect, type PanelSelectInteraction } from "./panel/select";
 export { deny, isAdmin } from "./panel/shared";
