@@ -209,7 +209,7 @@ function buildInviteContainer(inviteUrl: string, verificationCode: string | null
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `⏱️ Expires in **30 minutes** | **1 use**\n_This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>_`,
+        `⏱️ Expires in **30 minutes** | **1 use**\n-# This message will be auto-deleted <t:${Math.floor((Date.now() + 30_000) / 1000)}:R>`,
       ),
     );
 
